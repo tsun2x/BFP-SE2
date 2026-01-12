@@ -1,0 +1,256 @@
+/* ===========================
+   TOP NAVBAR MAIN STYLE
+=========================== */
+.topnav {
+  height: 65px;
+  background: linear-gradient(135deg, #611414, #881b1b, #B22222); 
+  border-bottom: 1px solid #707070;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  padding: 0 25px;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  font-family: "Poppins", sans-serif;
+  
+}
+
+/* ===========================
+   RIGHT SIDE
+=========================== */
+.topnav-right {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+/* NOTIFICATION ICON */
+.notif-wrapper {
+  position: relative;
+}
+
+.notif-btn {
+  background: none;
+  border: none;
+  font-size: 20px;
+  cursor: pointer;
+  color: #444;
+  transition: 0.2s;
+}
+
+.notif-btn:hover {
+  color: #af0d0d;
+}
+
+/* ===========================
+   NOTIFICATION DROPDOWN
+=========================== */
+.notif-dropdown {
+  position: absolute;
+  right: 0;
+  top: 45px;
+  width: 280px;
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 14px;
+  box-shadow: 0px 4px 12px rgba(0,0,0,0.12);
+  z-index: 50;
+  animation: fadeIn 0.2s ease;
+}
+
+.notif-dropdown h4 {
+  margin: 0 0 10px 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: #333;
+  border-bottom: 1px solid #f3f3f3;
+  padding-bottom: 8px;
+}
+
+.notif-item {
+  padding: 10px 0;
+  border-bottom: 1px solid #f3f3f3;
+}
+
+.notif-item:last-child {
+  border-bottom: none;
+}
+
+.notif-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #222;
+  margin: 0;
+}
+
+.notif-time {
+  font-size: 12px;
+  color: #777;
+}
+
+.notif-view-all {
+  margin-top: 12px;
+  width: 100%;
+  background: #f6f6f6;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 13px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.notif-view-all:hover {
+  background: #ececec;
+}
+
+/* USER AVATAR */
+.user-avatar-wrapper {
+  position: relative;
+}
+
+.user-avatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: #ececec;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #666;
+  font-size: 18px;
+  cursor: pointer;
+  border: none;
+  transition: 0.2s;
+}
+
+.user-avatar:hover {
+  background: #d9d9d9;
+  color: #333;
+}
+
+/* ===========================
+   USER MENU DROPDOWN
+=========================== */
+.user-menu-dropdown {
+  position: absolute;
+  right: 0;
+  top: 45px;
+  width: 220px;
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 0;
+  box-shadow: 0px 4px 12px rgba(0,0,0,0.15);
+  z-index: 50;
+  animation: fadeIn 0.2s ease;
+  overflow: hidden;
+}
+
+.user-menu-header {
+  padding: 14px;
+  background: linear-gradient(135deg, #611414, #881b1b);
+  color: #fff;
+}
+
+.user-menu-header h5 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.user-rank {
+  margin: 4px 0 0 0;
+  font-size: 12px;
+  opacity: 0.9;
+}
+
+.user-menu-divider {
+  height: 1px;
+  background: #f0f0f0;
+}
+
+.user-menu-item {
+  width: 100%;
+  padding: 10px 14px;
+  border: none;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+  font-size: 14px;
+  color: #333;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  transition: 0.2s;
+}
+
+.user-menu-item:hover {
+  background: #f5f5f5;
+  color: #B22222;
+}
+
+.user-menu-item i {
+  font-size: 14px;
+}
+
+/* ===========================
+   NOTIF ACTIVE STATE
+=========================== */
+.notif-btn.notif-active {
+  background: #f0f0f0;
+  color: #B22222;
+}
+
+
+
+.notif-btn {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: #f3f3f3;
+  border: none;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+
+  font-size: 18px;
+  cursor: pointer;
+  color: #555;
+}
+
+/* RED DOT INDICATOR */
+.notif-indicator {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 9px;
+  height: 9px;
+  background: #0cda17;
+  border-radius: 50%;
+  animation: pulse 1.2s infinite ease-in-out;
+}
+
+/* Cute little pulsing animation */
+@keyframes pulse {
+  0% { transform: scale(1); opacity: 0.9; }
+  50% { transform: scale(1.35); opacity: 1; }
+  100% { transform: scale(1); opacity: 0.9; }
+}
+
+
+@keyframes ping {
+  0% { transform: scale(1); opacity: 0.9; }
+  50% { transform: scale(1.5); opacity: 1; }
+  100% { transform: scale(1); opacity: 0.9; }
+}
+
+
+
+/* ANIMATION */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+

@@ -1,0 +1,400 @@
+/* Entire page wrapper */
+.readiness-wrapper {
+  padding: 30px;
+  font-family: "Poppins", sans-serif;
+  background: #f8f9fa;
+  min-height: calc(100vh - 130px);
+}
+
+/* Title */
+.readiness-title {
+  font-size: 28px;
+  font-weight: 700;
+  margin-bottom: 30px;
+  color: #333;
+  text-align: center;
+}
+
+/* Sub-branches Overview */
+.sub-branches-overview {
+  margin-bottom: 30px;
+}
+
+.sub-branches-overview h2 {
+  font-size: 20px;
+  font-weight: 600;
+  margin-bottom: 20px;
+  color: #333;
+  text-align: center;
+}
+
+.branches-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 15px;
+  margin-bottom: 30px;
+}
+
+.branch-card {
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 12px;
+  padding: 15px;
+  text-align: center;
+  transition: all 0.3s ease;
+}
+
+.branch-card:hover {
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  transform: translateY(-2px);
+}
+
+.branch-card h3 {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 10px;
+  color: #333;
+}
+
+.branch-status {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 12px;
+}
+
+.branch-status-text {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.branch-readiness {
+  font-size: 11px;
+  opacity: 0.8;
+}
+
+.update-branch-btn {
+  background: linear-gradient(135deg, #ff6b35, #f77b00);
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.update-branch-btn:hover {
+  background: linear-gradient(135deg, #f77b00, #cc5500);
+  transform: translateY(-1px);
+}
+
+/* Branch status colors */
+.branch-status.ready {
+  background: #e6ffe6;
+  color: #088100;
+}
+
+.branch-status.not-ready {
+  background: #f8f9fa;
+  color: #6c757d;
+}
+
+.branch-status.partially-ready {
+  background: #e9ecef;
+  color: #495057;
+}
+
+.branch-status.standby {
+  background: #fff4d6;
+  color: #b55c00;
+}
+
+.branch-status.deployed {
+  background: #ffe6e6;
+  color: #d10000;
+}
+
+.branch-status.emergency {
+  background: #ff0000;
+  color: #fff;
+}
+
+/* Simple Layout */
+.readiness-container {
+  max-width: 800px;
+  margin: 0 auto;
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+  overflow: hidden;
+}
+
+/* Header Section */
+.readiness-header {
+  background: linear-gradient(135deg, #ff7b00, #ff5a24);
+  color: white;
+  padding: 25px 30px;
+  text-align: center;
+}
+
+.readiness-header h2 {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0;
+}
+
+/* Content Section */
+.readiness-content {
+  padding: 30px;
+}
+
+/* Section Groups */
+.checklist-section {
+  margin-bottom: 30px;
+}
+
+.section-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 15px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid #ff7b00;
+}
+
+.checklist-items {
+  display: grid;
+  gap: 10px;
+}
+
+/* Simple Check Rows */
+.check-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 15px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border: 1px solid #e9ecef;
+  transition: all 0.2s ease;
+  cursor: pointer;
+  text-align: left;
+}
+
+.check-row:hover {
+  background: #fff;
+  border-color: #ff7b00;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(255, 123, 0, 0.1);
+}
+
+.check-row input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: #ff7b00;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.check-row span {
+  font-size: 14px;
+  color: #444;
+  font-weight: 500;
+  text-align: left;
+  flex: 1;
+}
+
+.check-row input[type="checkbox"]:checked + span {
+  color: #28a745;
+  font-weight: 600;
+}
+
+/* Status Section */
+.status-section {
+  background: #f8f9fa;
+  padding: 25px;
+  border-radius: 12px;
+  text-align: center;
+  margin-top: 30px;
+  text-align: center;
+}
+
+.status-section h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 15px;
+  text-align: center;
+}
+
+/* Simple Status Meter */
+.status-meter {
+  padding: 20px;
+  border-radius: 12px;
+  color: white;
+  font-size: 18px;
+  font-weight: 700;
+  margin: 15px auto;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  transition: all 0.3s ease;
+  text-align: center;
+  max-width: 300px;
+}
+
+.status-meter.ready {
+  background: linear-gradient(135deg, #28a745, #218838);
+  box-shadow: 0 4px 15px rgba(40, 167, 69, 0.3);
+}
+
+.status-meter.partiallyready {
+  background: linear-gradient(135deg, #ffc107, #e0a800);
+  box-shadow: 0 4px 15px rgba(255, 193, 7, 0.3);
+}
+
+.status-meter.notready {
+  background: linear-gradient(135deg, #dc3545, #c82333);
+  box-shadow: 0 4px 15px rgba(220, 53, 69, 0.3);
+}
+
+.status-meter:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+}
+
+.status-note {
+  font-size: 13px;
+  color: #666;
+  margin-bottom: 20px;
+  line-height: 1.4;
+  text-align: center;
+}
+
+/* Simple Confirm Button */
+.confirm-button {
+  display: block;
+  width: 100%;
+  max-width: 300px;
+  margin: 0 auto;
+  background: linear-gradient(135deg, #ff7b00, #ff5a24);
+  color: white;
+  padding: 15px 20px;
+  font-size: 15px;
+  font-weight: 600;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  box-shadow: 0 4px 15px rgba(255, 123, 0, 0.3);
+  text-align: center;
+}
+
+.confirm-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(255, 123, 0, 0.4);
+}
+
+.confirm-button:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 10px rgba(255, 123, 0, 0.3);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .readiness-wrapper {
+    padding: 20px;
+  }
+  
+  .readiness-title {
+    font-size: 24px;
+    margin-bottom: 20px;
+  }
+  
+  .readiness-container {
+    border-radius: 12px;
+  }
+  
+  .readiness-header {
+    padding: 20px;
+  }
+  
+  .readiness-header h2 {
+    font-size: 18px;
+  }
+  
+  .readiness-content {
+    padding: 20px;
+  }
+  
+  .section-title {
+    font-size: 16px;
+  }
+  
+  .check-row {
+    padding: 10px 12px;
+    font-size: 13px;
+  }
+  
+  .status-section {
+    padding: 20px;
+  }
+  
+  .status-meter {
+    padding: 15px;
+    font-size: 16px;
+  }
+  
+  .confirm-button {
+    padding: 12px 16px;
+    font-size: 14px;
+  }
+}
+
+@media (max-width: 480px) {
+  .readiness-wrapper {
+    padding: 15px;
+  }
+  
+  .readiness-title {
+    font-size: 22px;
+  }
+  
+  .readiness-header {
+    padding: 15px;
+  }
+  
+  .readiness-content {
+    padding: 15px;
+  }
+  
+  .check-row {
+    padding: 8px 10px;
+    font-size: 12px;
+    gap: 10px;
+  }
+  
+  .check-row input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+  }
+  
+  .status-section {
+    padding: 15px;
+  }
+  
+  .status-meter {
+    padding: 12px;
+    font-size: 14px;
+  }
+  
+  .confirm-button {
+    padding: 10px 14px;
+    font-size: 13px;
+  }
+}
+

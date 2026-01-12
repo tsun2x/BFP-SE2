@@ -1,0 +1,27 @@
+# Root ignore rules for the entire SE_BFP monorepo
+
+# Node / JS
+node_modules/
+npm-debug.log*
+yarn-debug.*
+yarn-error.*
+
+# Expo / React Native (native build artifacts if you generate them later)
+.expo/
+.expo-shared/
+android/
+ios/
+
+# Logs
+*.log
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# PHP / Composer (if you ever use it)
+vendor/
+
+# Generic build outputs
+/dist/
+/build/

@@ -1,0 +1,104 @@
+@import url("https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css");
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
+
+/* MAIN WRAPPER */
+.app-layout {
+  display: flex;
+  width: 100%;
+  height: 100vh;
+  overflow: hidden;
+  font-family: 'Poppins', sans-serif;
+}
+
+/* RESET */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: "Poppins", sans-serif;
+}
+
+/* MAIN LAYOUT */
+.app-layout {
+  display: flex;
+  height: 100vh;
+  width: 100%;
+  overflow: hidden;
+}
+
+/* SIDEBAR — FIXED LEFT SIDE */
+.sidebar {
+  width: 260px;
+  min-width: 260px;
+  background: #1e1e1e;
+  height: 100vh;
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 20;
+}
+
+/* RIGHT SIDE WRAPPER */
+.main-container {
+  margin-left: 260px;  /* ENSURES TOPBAR + CONTENT ARE ON RIGHT */
+  width: calc(100% - 260px);
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* TOPBAR — FIXED AT TOP OF RIGHT SIDE */
+.topbar {
+  height: 75px;
+  width: 100%; /* IMPORTANT — ONLY RIGHT SIDE */
+ 
+  display: flex;
+  justify-content: flex-end; /* RIGHT SIDE ITEMS */
+  align-items: center;
+  padding: 0 25px;
+  position: sticky;
+  top: 0;
+  z-index: 15;
+}
+
+/* CONTENT — ONLY THIS SCROLLS */
+.content-area {
+  flex: 1;
+  width: 100%;
+  overflow-y: auto;
+  padding: 25px 30px;
+  background: #f6f6f9;
+}
+
+
+/* Universal page container */
+.page-container,
+.page-wrapper,
+.content-container {
+  width: 100% !important;
+  max-width: 100% !important;
+}
+/* MASTER CONTENT WRAPPER */
+.content-area {
+  padding: 30px 40px;        /* clean spacing */
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* FULL-WIDTH PAGE CONTAINERS */
+.page-container {
+  width: 100%;
+  margin-left: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* PAGE TITLES */
+.page-title {
+  font-size: 32px;
+  font-weight: 700;
+  margin-bottom: 25px;
+  color: #222;
+}
+

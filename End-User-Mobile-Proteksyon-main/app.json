@@ -1,0 +1,46 @@
+{
+  "expo": {
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/MainLogo.png",
+        "backgroundColor": "#ffffff"
+      },
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false,
+      "package": "com.tsun2x.mobilecivilianexpoclean",
+      "permissions": [
+        "INTERNET",
+        "CAMERA",
+        "RECORD_AUDIO",
+        "MODIFY_AUDIO_SETTINGS",
+        "BLUETOOTH",
+        "BLUETOOTH_CONNECT"
+      ],
+  "usesCleartextTraffic": true
+    },
+    "name": "mobile-civilian-expo-clean",
+    "slug": "mobile-civilian-expo-clean",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/MainLogo.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/MainLogo.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true
+    },
+    "web": {
+      "favicon": "./assets/MainLogo.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "6b1697b2-c94c-4b7b-a742-c87b4e7f2859"
+      }
+    },
+    "owner": "tsun2x"
+  }
+}

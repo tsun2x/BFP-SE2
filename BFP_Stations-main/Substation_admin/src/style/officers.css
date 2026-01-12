@@ -1,0 +1,181 @@
+/* -------------------------------------- */
+/* PAGE WRAPPER */
+/* -------------------------------------- */
+.officer-log-page {
+  width: 100%;
+  padding: 20px 30px;
+  box-sizing: border-box;
+  font-family: "Poppins", sans-serif;
+}
+
+/* PAGE TITLE */
+.officer-page-title {
+  font-size: 30px;
+  font-weight: 700;
+  color: #1e1e1e;
+  margin-bottom: 25px;
+}
+
+
+
+/* -------------------------------------- */
+/* SEARCH + FILTER CARD */
+/* -------------------------------------- */
+.officer-search-card {
+  background: #fff;
+  padding: 20px 22px;
+  border-radius: 14px;
+  box-shadow: 0px 2px 6px rgba(0,0,0,0.08);
+  margin-bottom: 28px;
+
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-start;
+  gap: 25px;
+}
+
+
+
+/* SEARCH INPUT */
+.officer-search-input {
+  width: 260px;
+  height: 42px;
+  padding: 10px 14px;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  font-size: 14px;
+  outline: none;
+  transition: 0.2s;
+}
+
+.officer-search-input:focus {
+  border-color: #ff7a00;
+}
+
+
+
+/* -------------------------------------- */
+/* FILTERS */
+/* -------------------------------------- */
+.officer-filters {
+  display: flex;
+  align-items: flex-end;
+  gap: 20px;
+}
+
+.officer-filter-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.officer-filter-group label {
+  font-size: 13px;
+  color: #444;
+  margin-bottom: 4px;
+}
+
+.officer-filter-input {
+  width: 170px;
+  height: 42px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid #ccc;
+  outline: none;
+  background: #fff;
+  transition: 0.2s;
+}
+
+.officer-filter-input:focus {
+  border-color: #ff7a00;
+}
+
+
+
+/* -------------------------------------- */
+/* TABLE CARD */
+/* -------------------------------------- */
+.officer-table-card {
+  background: #fff;
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0px 2px 6px rgba(0,0,0,0.08);
+  border: 2px solid #ff7a00; /* same theme orange */
+}
+
+
+
+/* TABLE FORMAT */
+.officer-table-card table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+/* TABLE HEADER */
+.officer-table-card thead th {
+  background: linear-gradient(to right, #ff5500, #ff7a00);
+  color: white;
+  padding: 14px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.officer-table-card td,
+.officer-table-card th {
+  padding: 16px 14px;
+  font-size: 14px;
+  border-bottom: 1px solid #f2f2f2;
+}
+
+.officer-table-card tbody tr:last-child td {
+  border-bottom: none;
+}
+
+
+
+/* -------------------------------------- */
+/* STATUS COLORS */
+/* -------------------------------------- */
+/* -------------------------------------- */
+/* MODERN STATUS BADGES */
+/* -------------------------------------- */
+.officer-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px;
+  border-radius: 50px;
+  font-size: 13px;
+  font-weight: 600;
+  width: fit-content;
+}
+
+/* DOT CIRCLE */
+.officer-status-badge::before {
+  content: "";
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+/* ONLINE */
+.officer-status-online {
+  background: #dfffe7;      /* soft mint */
+  color: #0e8c35;
+}
+
+.officer-status-online::before {
+  background: #0e8c35;
+}
+
+/* OFFLINE */
+.officer-status-offline {
+  background: #ffe1e1;      /* soft red */
+  color: #c21d1d;
+}
+
+.officer-status-offline::before {
+  background: #c21d1d;
+}
+
+

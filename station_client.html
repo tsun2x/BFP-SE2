@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Fire Station WebRTC Signaling Console</title>
+  <style>
+    :root {
+      --bfp-red: #e53935;
+      --bfp-dark: #1e1e1e;
+      --bg: #f5f5f5;
+      --card-bg: #ffffff;
+      --border: #e0e0e0;
+      --accent: #1565c0;
+      --text: #333333;
+      --muted: #777777;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    .page {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .header {
+      background: var(--bfp-red);
+      color: #ffffff;
+      padding: 16px 24px;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+    }
+
+    .header-title {
+      font-size: 20px;
+      font-weight: 700;
+      margin: 0 0 4px;
+    }
+
+    .header-subtitle {
+      margin: 0;
+      font-size: 13px;
+      opacity: 0.9;
+    }
+
+    .main {
+      padding: 16px 24px 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      max-width: 1100px;
+      width: 100%;
+      margin: 0 auto;
+    }
+
+    .card {
+      background: var(--card-bg);
+      border-radius: 12px;
+      padding: 16px 20px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+      border: 1px solid var(--border);
+    }
+
+    .card-title {
+      font-size: 16px;
+      font-weight: 600;
+      margin: 0 0 8px;
+      color: var(--bfp-dark);
+    }
+
+    .card-text {
+      font-size: 13px;
+      color: var(--muted);
+      margin: 0 0 12px;
+    }
+
+    .controls-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-end;
+      gap: 12px;
+      margin-bottom: 8px;
+    }
+
+    .field-label {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .field-input {
+      padding: 6px 8px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      width: 110px;
+    }
+
+    .button-group {
+      display: flex;
+      gap: 8px;
+    }
+
+    .btn {
+      padding: 8px 14px;
+      border-radius: 999px;
+      border: none;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+    }
+
+    .btn-primary {
+      background: var(--bfp-red);
+      color: #ffffff;
+    }
+
+    .btn-primary:disabled {
+      opacity: 0.6;
+      cursor: default;
+    }
+
+    .btn-secondary {
+      background: #eeeeee;
+      color: var(--text);
+    }
+
+    .since-row {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+
+    .since-label {
+      font-weight: 500;
+      margin-right: 4px;
+    }
+
+    .since-value {
+      font-family: 'Roboto Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+    }
+
+    .log {
+      white-space: pre-wrap;
+      background: #fafafa;
+      padding: 10px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      max-height: 260px;
+      overflow-y: auto;
+      font-family: 'Roboto Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+      font-size: 11px;
+    }
+
+    .audio-player {
+      width: 100%;
+      margin-top: 8px;
+    }
+
+    @media (min-width: 900px) {
+      .main {
+        flex-direction: row;
+        align-items: flex-start;
+      }
+
+      .card-controls {
+        flex: 1;
+      }
+
+      .card-log {
+        flex: 2;
+      }
+
+      .card-audio {
+        flex-basis: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="header">
+      <div class="header-title">BFP Station Voice Console</div>
+      <p class="header-subtitle">Monitor and answer incoming emergency calls for this station.</p>
+    </header>
+
+    <main class="main">
+      <section class="card card-controls">
+        <h2 class="card-title">Signaling Controls</h2>
+        <p class="card-text">Set this station's ID and keep polling running during your shift to receive calls.</p>
+
+        <div class="controls-row">
+          <label class="field-label">
+            Station ID
+            <input id="stationId" type="number" value="101" class="field-input" />
+          </label>
+
+          <div class="button-group">
+            <button id="startBtn" class="btn btn-primary">Start Polling</button>
+            <button id="stopBtn" class="btn btn-secondary" disabled>Stop</button>
+          </div>
+        </div>
+
+        <div class="since-row">
+          <span class="since-label">Last signal ID:</span>
+          <span id="sinceId" class="since-value">0</span>
+        </div>
+      </section>
+
+      <section class="card card-log">
+        <h2 class="card-title">Incoming Signals Log</h2>
+        <div id="log" class="log"></div>
+      </section>
+
+      <section class="card card-audio">
+        <h2 class="card-title">Remote Audio</h2>
+        <p class="card-text">When a call is connected, you will hear the civilian's audio here.</p>
+        <audio id="remoteAudio" autoplay controls class="audio-player"></audio>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    let polling = false;
+    let sinceId = 0;
+    let intervalHandle = null;
+    let pc = null;
+    let currentCallerUserId = null;
+
+    const logEl = document.getElementById('log');
+    const sinceEl = document.getElementById('sinceId');
+    const stationInput = document.getElementById('stationId');
+    const startBtn = document.getElementById('startBtn');
+    const stopBtn = document.getElementById('stopBtn');
+
+    // If a stationId is provided in the URL query (e.g. ?stationId=103), use it
+    // to override the default Station ID input. This lets each admin/substation
+    // app embed the same page but bind it to their own station.
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const urlStationId = params.get('stationId') || params.get('station_id');
+      if (urlStationId) {
+        stationInput.value = urlStationId;
+      }
+    } catch (e) {
+      // ignore URL parsing errors
+    }
+
+    function appendLog(message) {
+      const time = new Date().toLocaleTimeString();
+      logEl.textContent += `[${time}] ${message}\n`;
+      // Keep the log from growing without bound so the UI stays readable
+      if (logEl.textContent.length > 8000) {
+        logEl.textContent = logEl.textContent.slice(-8000);
+      }
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    function formatSignalSummary(sig) {
+      if (!sig || typeof sig !== 'object') return String(sig);
+      const parts = [];
+      if (sig.id !== undefined) parts.push('id=' + sig.id);
+      if (sig.type) parts.push('type=' + sig.type);
+      if (sig.from_user_id !== undefined && sig.from_user_id !== null) {
+        parts.push('from_user_id=' + sig.from_user_id);
+      }
+      if (sig.to_station_id !== undefined && sig.to_station_id !== null) {
+        parts.push('to_station_id=' + sig.to_station_id);
+      }
+      if (sig.created_at) parts.push('created_at=' + sig.created_at);
+      return parts.join(', ');
+    }
+
+    async function sendSignal(body) {
+      try {
+        const res = await fetch('./api/webrtc_send_signal.php', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        const data = await res.json();
+        if (!data.success) {
+          appendLog('Error sending signal: ' + (data.error || 'unknown'));
+        } else {
+          appendLog('Signal sent. id=' + data.id + ' type=' + body.type);
+        }
+      } catch (err) {
+        appendLog('Error sending signal (network): ' + err.message);
+      }
+    }
+
+    async function ensurePeerConnection() {
+      if (pc) return pc;
+
+      pc = new RTCPeerConnection({
+        iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+      });
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        stream.getTracks().forEach((track) => pc.addTrack(track, stream));
+      } catch (err) {
+        appendLog('Error getting local media: ' + err.message);
+      }
+
+      pc.onicecandidate = (event) => {
+        if (!event.candidate || !currentCallerUserId) return;
+        appendLog('ICE candidate from station');
+        sendSignal({
+          from_user_id: null,
+          to_user_id: currentCallerUserId,
+          to_station_id: parseInt(stationInput.value, 10) || 0,
+          type: 'ice',
+          payload: event.candidate,
+        });
+      };
+
+      pc.ontrack = (event) => {
+        appendLog('Remote track received on station (attaching to audio element).');
+        const audioEl = document.getElementById('remoteAudio');
+        if (audioEl && event.streams[0]) {
+          // Attach the remote MediaStream and try to start playback
+          audioEl.srcObject = event.streams[0];
+          audioEl.muted = false;
+          audioEl.volume = 1.0;
+          try {
+            const p = audioEl.play();
+            if (p && typeof p.catch === 'function') {
+              p.catch((err) => {
+                appendLog('Error starting audio playback: ' + err.message + ' (click Play on the audio control if needed).');
+              });
+            }
+          } catch (err) {
+            appendLog('Error starting audio playback: ' + err.message + ' (click Play on the audio control if needed).');
+          }
+        } else {
+          appendLog('No remote audio element or stream available to attach');
+        }
+      };
+
+      return pc;
+    }
+
+    async function handleOfferSignal(sig) {
+      try {
+        currentCallerUserId = sig.from_user_id;
+        appendLog('Handling offer from user_id=' + currentCallerUserId);
+
+        const pcInstance = await ensurePeerConnection();
+        await pcInstance.setRemoteDescription(new RTCSessionDescription(sig.payload));
+
+        const answer = await pcInstance.createAnswer();
+        await pcInstance.setLocalDescription(answer);
+
+        appendLog('Answer created, sending back to user.');
+
+        await sendSignal({
+          from_user_id: null,
+          to_user_id: currentCallerUserId,
+          // Use the current station input value to ensure to_station_id is not null
+          to_station_id: parseInt(stationInput.value, 10) || 0,
+          type: 'answer',
+          payload: answer,
+        });
+      } catch (err) {
+        appendLog('Error handling offer: ' + err.message);
+      }
+    }
+
+    async function pollOnce() {
+      const stationId = parseInt(stationInput.value, 10) || 0;
+      if (!stationId) {
+        appendLog('Invalid station_id');
+        return;
+      }
+
+      try {
+        const url = `./api/webrtc_poll_signals.php?station_id=${stationId}&since_id=${sinceId}`;
+        const res = await fetch(url);
+        const data = await res.json();
+
+        if (!data.success) {
+          appendLog('Error from server: ' + (data.error || 'unknown'));
+          return;
+        }
+
+        if (Array.isArray(data.signals) && data.signals.length > 0) {
+          for (const sig of data.signals) {
+            appendLog('Signal received: ' + formatSignalSummary(sig));
+            if (sig.id > sinceId) {
+              sinceId = sig.id;
+              sinceEl.textContent = String(sinceId);
+            }
+
+            if (sig.type === 'offer') {
+              await handleOfferSignal(sig);
+            }
+          }
+        }
+      } catch (err) {
+        appendLog('Fetch error: ' + err.message);
+      }
+    }
+
+    startBtn.addEventListener('click', () => {
+      if (polling) return;
+      polling = true;
+      startBtn.disabled = true;
+      stopBtn.disabled = false;
+      appendLog('Polling started');
+
+      // Immediate first poll
+      pollOnce();
+      // Poll every second
+      intervalHandle = setInterval(pollOnce, 1000);
+    });
+
+    stopBtn.addEventListener('click', () => {
+      if (!polling) return;
+      polling = false;
+      startBtn.disabled = false;
+      stopBtn.disabled = true;
+      if (intervalHandle) {
+        clearInterval(intervalHandle);
+        intervalHandle = null;
+      }
+      appendLog('Polling stopped');
+    });
+
+    // NOTE: We no longer auto-start polling on page load, because Chrome
+    // blocks audio playback without a prior user interaction in this frame.
+    // Operator must click "Start Polling" once per shift to begin.
+  </script>
+
+</body>
+</html>

@@ -1,5 +1,5 @@
 import express from 'express';
-import { pool } from '../config/database.js';
+import { supabase, db } from '../config/supabase.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { requireRole } from '../middleware/role.js';
 
@@ -9,9 +9,9 @@ const router = express.Router();
 router.get('/firestations', async (req, res) => {
   try {
     console.log('[GET /firestations] Request received');
-    const [rows] = await pool.query('SELECT station_id, station_name, province, city, contact_number, latitude, longitude, station_type FROM fire_stations ORDER BY station_name ASC');
-    console.log('[GET /firestations] Query returned', rows.length, 'stations');
-    res.json({ stations: rows });
+    const stations = await db.getStations();
+    console.log('[GET /firestations] Query returned', stations.length, 'stations');
+    res.json({ stations });
   } catch (error) {
     console.error('Get firestations error:', error);
     res.status(500).json({ message: 'Failed to retrieve stations', error: error.message });
@@ -22,9 +22,11 @@ router.get('/firestations', async (req, res) => {
 router.get('/firestations/:id', async (req, res) => {
   try {
     const stationId = req.params.id;
-    const [rows] = await pool.query('SELECT station_id, station_name, province, city, contact_number, latitude, longitude, station_type FROM fire_stations WHERE station_id = ?', [stationId]);
-    if (rows.length === 0) return res.status(404).json({ message: 'Station not found' });
-    res.json({ station: rows[0] });
+    const station = await db.getStation(stationId);
+    if (!station) {
+      return res.status(404).json({ message: 'Station not found' });
+    }
+    res.json({ station });
   } catch (error) {
     console.error('Get station error:', error);
     res.status(500).json({ message: 'Failed to retrieve station', error: error.message });
@@ -47,12 +49,17 @@ router.post('/firestations', authenticateToken, requireRole('admin'), async (req
     }
 
     // Insert station
-    const [result] = await pool.query(
-      'INSERT INTO fire_stations (station_name, province, city, contact_number, latitude, longitude, station_type) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [stationName, province || null, city || null, contactNumber || null, lat, lng, stationType]
-    );
+    const station = await db.createStation({
+      station_name: stationName,
+      province: province || null,
+      city: city || null,
+      contact_number: contactNumber || null,
+      latitude: lat,
+      longitude: lng,
+      station_type: stationType
+    });
 
-    const stationId = result.insertId;
+    const stationId = station.station_id;
     res.status(201).json({ message: 'Station created', stationId });
   } catch (error) {
     console.error('Create station error:', error);
@@ -66,27 +73,23 @@ router.put('/firestations/:id', authenticateToken, requireRole('admin'), async (
     const stationId = req.params.id;
     const { stationName, province, city, contactNumber, latitude, longitude, stationType } = req.body;
 
-    // Build update query dynamically
-    const updates = [];
-    const params = [];
-    if (stationName !== undefined) { updates.push('station_name = ?'); params.push(stationName); }
-    if (province !== undefined) { updates.push('province = ?'); params.push(province); }
-    if (city !== undefined) { updates.push('city = ?'); params.push(city); }
-    if (contactNumber !== undefined) { updates.push('contact_number = ?'); params.push(contactNumber); }
-    if (latitude !== undefined && longitude !== undefined) { updates.push('latitude = ?', 'longitude = ?'); params.push(parseFloat(latitude), parseFloat(longitude)); }
-    if (stationType !== undefined) { updates.push('station_type = ?'); params.push(stationType); }
+    // Build update object dynamically
+    const updates = {};
+    if (stationName !== undefined) updates.station_name = stationName;
+    if (province !== undefined) updates.province = province;
+    if (city !== undefined) updates.city = city;
+    if (contactNumber !== undefined) updates.contact_number = contactNumber;
+    if (latitude !== undefined && longitude !== undefined) {
+      updates.latitude = parseFloat(latitude);
+      updates.longitude = parseFloat(longitude);
+    }
+    if (stationType !== undefined) updates.station_type = stationType;
 
-    if (updates.length === 0) {
+    if (Object.keys(updates).length === 0) {
       return res.status(400).json({ message: 'No fields provided to update' });
     }
 
-    const query = `UPDATE fire_stations SET ${updates.join(', ')} WHERE station_id = ?`;
-    params.push(stationId);
-
-    const [result] = await pool.query(query, params);
-    if (result.affectedRows === 0) {
-      return res.status(404).json({ message: 'Station not found' });
-    }
+    await db.updateStation(stationId, updates);
 
     res.json({ message: 'Station updated', stationId });
   } catch (error) {
@@ -99,10 +102,13 @@ router.put('/firestations/:id', authenticateToken, requireRole('admin'), async (
 router.delete('/firestations/:id', authenticateToken, requireRole('admin'), async (req, res) => {
   try {
     const stationId = req.params.id;
-    const [result] = await pool.query('DELETE FROM fire_stations WHERE station_id = ?', [stationId]);
-    if (result.affectedRows === 0) {
-      return res.status(404).json({ message: 'Station not found' });
-    }
+    const { error } = await supabase
+      .from('fire_stations')
+      .delete()
+      .eq('station_id', stationId);
+
+    if (error) throw error;
+
     res.json({ message: 'Station deleted' });
   } catch (error) {
     console.error('Delete station error:', error);

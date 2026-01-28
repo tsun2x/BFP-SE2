@@ -1,5 +1,5 @@
 import { Link, useNavigate } from "react-router-dom";
-import { useState, useContext, useEffect } from "react";
+import { useState, useContext } from "react";
 import { AuthContext } from "../context/AuthContext";
 import "../style/auth.css";
 
@@ -12,7 +12,6 @@ export default function Signup() {
     idNumber: "",
     rank: "",
     userType: "Main",
-    assignedStationId: "",
     password: "",
     confirmPassword: ""
   });
@@ -92,47 +91,7 @@ export default function Signup() {
     if (name === "password") {
       setPasswordStrength(checkPasswordStrength(value));
     }
-    // If changing userType to Substation, fetch stations
-    if (name === 'userType' && value === 'Substation') {
-      fetchStations();
-    }
   };
-
-  const fetchStations = async () => {
-    try {
-      const apiUrl = import.meta.env.VITE_API_URL || "http://localhost/SE_BFP/api";
-      const res = await fetch(`${apiUrl}/stations.php`);
-      if (res.ok) {
-        const data = await res.json();
-        setStations(data.stations || []);
-      }
-    } catch (err) {
-      console.error('Failed to fetch stations', err);
-    }
-  };
-
-  // On mount, fetch stations and auto-select the Main station (central)
-  useEffect(() => {
-    (async () => {
-      try {
-        const apiUrl = import.meta.env.VITE_API_URL || "http://localhost/SE_BFP/api";
-        const res = await fetch(`${apiUrl}/stations.php`);
-        if (res.ok) {
-          const data = await res.json();
-          const list = data.stations || [];
-          // For Main signup, only show Main stations
-          const mainStationsOnly = list.filter(s => s.station_type === 'Main');
-          setStations(mainStationsOnly);
-          // Auto-select the Main station
-          if (mainStationsOnly.length > 0) {
-            setFormData(prev => ({ ...prev, assignedStationId: mainStationsOnly[0].station_id }));
-          }
-        }
-      } catch (err) {
-        console.error('Failed to fetch stations on mount', err);
-      }
-    })();
-  }, []);
 
   const getPasswordStrengthLabel = () => {
     const labels = ["Very Weak", "Weak", "Fair", "Good", "Strong"];
@@ -148,10 +107,6 @@ export default function Signup() {
     e.preventDefault();
     
     const newErrors = validateForm();
-    // if substation admin, ensure assignedStation selected
-    if (formData.userType === 'Substation' && !formData.assignedStationId) {
-      newErrors.assignedStationId = 'Please select assigned station';
-    }
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
       return;
@@ -161,25 +116,15 @@ export default function Signup() {
     setSignupError("");
     
     try {
-      // Build payload for signup
+      // Build payload with only basic user data
       const payload = {
         firstName: formData.firstName,
         lastName: formData.lastName,
         idNumber: formData.idNumber,
         rank: formData.rank,
-        password: formData.password
+        password: formData.password,
+        role: formData.userType === 'Main' ? 'admin' : 'end_user'
       };
-
-      // Map frontend userType to backend role/stationType when needed
-      if (formData.userType === 'Main') {
-        payload.stationType = 'Main';
-        payload.role = 'admin';
-        if (formData.assignedStationId) payload.assignedStationId = formData.assignedStationId;
-      } else if (formData.userType === 'Substation') {
-        payload.stationType = 'Substation';
-        payload.role = 'substation_admin';
-        payload.assignedStationId = formData.assignedStationId || null;
-      }
 
       const result = await signup(payload);
       
@@ -233,43 +178,6 @@ export default function Signup() {
                 )}
               </div>
             </div>
-
-            {formData.userType === 'Substation' && (
-              <div className="auth-row">
-                <div className="auth-group">
-                  <label>Assigned Station</label>
-                  <select
-                    name="assignedStationId"
-                    value={formData.assignedStationId}
-                    onChange={handleInputChange}
-                    className={errors.assignedStationId ? "error" : ""}
-                  >
-                    <option value="">-- Select Station --</option>
-                    {stations.map(s => (
-                      <option key={s.station_id} value={s.station_id}>{s.station_name}</option>
-                    ))}
-                  </select>
-                  {errors.assignedStationId && (
-                    <span className="error-message">{errors.assignedStationId}</span>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* For Main signups, show which central/Main station will be assigned (read-only) */}
-            {formData.userType === 'Main' && (
-              <div className="auth-row">
-                <div className="auth-group">
-                  <label>Assigned Station (Main)</label>
-                  <input type="text" readOnly value={
-                    (() => {
-                      const s = stations.find(x => x.station_id === formData.assignedStationId);
-                      return s ? `${s.station_name} (${s.station_type})` : 'No Main station found yet';
-                    })()
-                  } />
-                </div>
-              </div>
-            )}
 
           <form onSubmit={handleSignup}>
 
@@ -400,8 +308,7 @@ export default function Signup() {
                   rank: "",
                   userType: "Main",
                   password: "",
-                  confirmPassword: "",
-                  assignedStationId: ""
+                  confirmPassword: ""
                 });
                 setErrors({});
                 setSignupError("");

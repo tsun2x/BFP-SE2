@@ -1,5 +1,5 @@
 import express from 'express';
-import { pool } from '../config/database.js';
+import { supabase, db } from '../config/supabase.js';
 
 const router = express.Router();
 
@@ -16,68 +16,60 @@ router.get('/firetrucks/current-alarm', async (req, res) => {
       });
     }
 
-    const connection = await pool.getConnection();
+    // Get firetruck with current alarm
+    const { data: truck, error: truckError } = await supabase
+      .from('firetrucks')
+      .select(`
+        truck_id,
+        plate_number,
+        assigned_station_id,
+        current_alarm_id,
+        alarms!current_alarm_id (
+          alarm_id,
+          user_latitude,
+          user_longitude,
+          initial_alarm_level,
+          current_alarm_level,
+          status,
+          call_time,
+          dispatch_time,
+          resolve_time
+        )
+      `)
+      .eq('truck_id', truck_id)
+      .single();
 
-    try {
-      // Join firetrucks with alarms using current_alarm_id
-      const [rows] = await connection.query(
-        `SELECT 
-           f.truck_id,
-           f.plate_number,
-           f.station_id,
-           f.current_alarm_id,
-           a.alarm_id,
-           a.user_latitude,
-           a.user_longitude,
-           a.initial_alarm_level,
-           a.current_alarm_level,
-           a.status,
-           a.call_time,
-           a.dispatch_time,
-           a.resolve_time
-         FROM firetrucks f
-         LEFT JOIN alarms a ON a.alarm_id = f.current_alarm_id
-         WHERE f.truck_id = ?
-         LIMIT 1`,
-        [truck_id]
-      );
+    if (truckError && truckError.code !== 'PGRST116') throw truckError;
 
-      connection.release();
-
-      if (!rows.length || !rows[0].alarm_id) {
-        return res.json({
-          success: true,
-          hasAlarm: false,
-          alarm: null,
-        });
-      }
-
-      const row = rows[0];
-
-      const alarm = {
-        alarmId: row.alarm_id,
-        truckId: row.truck_id,
-        plateNumber: row.plate_number,
-        stationId: row.station_id,
-        userLatitude: Number(row.user_latitude),
-        userLongitude: Number(row.user_longitude),
-        initialAlarmLevel: row.initial_alarm_level,
-        currentAlarmLevel: row.current_alarm_level,
-        status: row.status,
-        callTime: row.call_time,
-        dispatchTime: row.dispatch_time,
-        resolveTime: row.resolve_time,
-      };
-
+    if (!truck || !truck.alarms) {
       return res.json({
         success: true,
-        hasAlarm: true,
-        alarm,
+        hasAlarm: false,
+        alarm: null,
       });
-    } catch (err) {
-      connection.release();
-      throw err;
     }
+
+    const alarm_data = truck.alarms;
+    const alarm = {
+      alarmId: alarm_data.alarm_id,
+      truckId: truck.truck_id,
+      plateNumber: truck.plate_number,
+      stationId: truck.assigned_station_id,
+      userLatitude: Number(alarm_data.user_latitude),
+      userLongitude: Number(alarm_data.user_longitude),
+      initialAlarmLevel: alarm_data.initial_alarm_level,
+      currentAlarmLevel: alarm_data.current_alarm_level,
+      status: alarm_data.status,
+      callTime: alarm_data.call_time,
+      dispatchTime: alarm_data.dispatch_time,
+      resolveTime: alarm_data.resolve_time,
+    };
+
+    return res.json({
+      success: true,
+      hasAlarm: true,
+      alarm,
+    });
   } catch (error) {
     console.error('GET /firetrucks/current-alarm error:', error);
     res.status(500).json({

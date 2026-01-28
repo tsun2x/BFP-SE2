@@ -150,7 +150,7 @@ function AppContent() {
 
   // Socket: listen for incidents and join station-specific room
   useEffect(() => {
-    const socket = io('http://10.80.242.64:5000');
+    const socket = io('http://localhost:5000');
 
     socket.on('connect', () => {
       console.log('Connected to socket server', socket.id);

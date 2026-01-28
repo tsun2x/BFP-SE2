@@ -1,5 +1,5 @@
 import express from 'express';
-import { pool } from '../config/database.js';
+import { supabase, db } from '../config/supabase.js';
 import { authenticateToken } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -25,8 +25,6 @@ router.post('/station-readiness', authenticateToken, async (req, res) => {
       });
     }
 
-    const connection = await pool.getConnection();
-
     try {
       // Debug: log what readiness will be applied
       try {
@@ -36,32 +34,37 @@ router.post('/station-readiness', authenticateToken, async (req, res) => {
       }
 
       // Insert readiness record
-      const [result] = await connection.query(
-        `INSERT INTO station_readiness (station_id, submitted_by_user_id, status, readiness_percentage, equipment_checklist)
-         VALUES (?, ?, ?, ?, ?)`,
-        [assignedStationId, userId, status, readinessPercentage, JSON.stringify(equipmentChecklist || {})]
-      );
+      const { data: readinessData, error: readinessError } = await supabase
+        .from('station_readiness')
+        .insert([{
+          station_id: assignedStationId,
+          submitted_by_user_id: userId,
+          status: status,
+          readiness_percentage: readinessPercentage,
+          equipment_checklist: JSON.stringify(equipmentChecklist || {})
+        }])
+        .select()
+        .single();
+
+      if (readinessError) throw readinessError;
 
       // Update fire_stations is_ready flag and last_status_update
       // READY and PARTIALLY_READY are both considered dispatchable (is_ready = 1).
       // Only NOT_READY is treated as not dispatchable (is_ready = 0).
-      const isReady = (status === 'READY' || status === 'PARTIALLY_READY') ? 1 : 0;
-      await connection.query(
-        `UPDATE fire_stations SET is_ready = ?, last_status_update = NOW() WHERE station_id = ?`,
-        [isReady, assignedStationId]
-      );
-
-      connection.release();
+      const isReady = (status === 'READY' || status === 'PARTIALLY_READY') ? true : false;
+      await db.updateStation(assignedStationId, {
+        is_ready: isReady,
+        last_status_update: new Date().toISOString()
+      });
 
       res.status(201).json({
         message: 'Station readiness submitted successfully',
-        readinessId: result.insertId,
+        readinessId: readinessData.readiness_id,
         stationId: assignedStationId,
         status,
         readinessPercentage
       });
     } catch (error) {
-      connection.release();
       throw error;
     }
   } catch (error) {
@@ -78,39 +81,37 @@ router.get('/station-readiness/:stationId', authenticateToken, async (req, res) 
   try {
     const { stationId } = req.params;
 
-    const connection = await pool.getConnection();
+    const { data: readiness, error } = await supabase
+      .from('station_readiness')
+      .select(`
+        *,
+        users!submitted_by_user_id (first_name, last_name),
+        fire_stations!station_id (station_name)
+      `)
+      .eq('station_id', stationId)
+      .order('submitted_at', { ascending: false })
+      .limit(1)
+      .single();
 
-    const [readiness] = await connection.query(
-      `SELECT r.*, u.first_name, u.last_name, fs.station_name
-       FROM station_readiness r
-       JOIN users u ON r.submitted_by_user_id = u.user_id
-       JOIN fire_stations fs ON r.station_id = fs.station_id
-       WHERE r.station_id = ?
-       ORDER BY r.submitted_at DESC
-       LIMIT 1`,
-      [stationId]
-    );
+    if (error && error.code !== 'PGRST116') throw error;
 
-    connection.release();
-
-    if (readiness.length === 0) {
+    if (!readiness) {
       return res.status(404).json({
         message: 'No readiness record found for this station'
       });
     }
 
-    const record = readiness[0];
     res.json({
-      readinessId: record.readiness_id,
-      stationId: record.station_id,
-      stationName: record.station_name,
-      status: record.status,
-      readinessPercentage: record.readiness_percentage,
-      equipmentChecklist: typeof record.equipment_checklist === 'string' 
-        ? JSON.parse(record.equipment_checklist) 
-        : record.equipment_checklist,
-      submittedBy: `${record.first_name} ${record.last_name}`,
-      submittedAt: record.submitted_at
+      readinessId: readiness.readiness_id,
+      stationId: readiness.station_id,
+      stationName: readiness.fire_stations.station_name,
+      status: readiness.status,
+      readinessPercentage: readiness.readiness_percentage,
+      equipmentChecklist: typeof readiness.equipment_checklist === 'string' 
+        ? JSON.parse(readiness.equipment_checklist) 
+        : readiness.equipment_checklist,
+      submittedBy: `${readiness.users.first_name} ${readiness.users.last_name}`,
+      submittedAt: readiness.submitted_at
     });
   } catch (error) {
     console.error('Get station readiness error:', error);
@@ -124,45 +125,46 @@ router.get('/station-readiness/:stationId', authenticateToken, async (req, res) 
 // Get all stations with their latest readiness (for overview)
 router.get('/stations-readiness-overview', authenticateToken, async (req, res) => {
   try {
-    const connection = await pool.getConnection();
+    const { data: stations, error: stationsError } = await supabase
+      .from('fire_stations')
+      .select(`
+        station_id,
+        station_name,
+        station_type,
+        is_ready,
+        last_status_update
+      `)
+      .order('station_type', { ascending: false })
+      .order('station_name', { ascending: true });
 
-    const [results] = await connection.query(
-      `SELECT 
-        fs.station_id,
-        fs.station_name,
-        fs.station_type,
-        fs.is_ready,
-        fs.last_status_update,
-        COALESCE(r.status, 'UNKNOWN') as readiness_status,
-        COALESCE(r.readiness_percentage, 0) as readiness_percentage,
-        COALESCE(u.first_name, 'N/A') as last_submitted_by_first_name,
-        COALESCE(u.last_name, 'N/A') as last_submitted_by_last_name,
-        r.submitted_at as last_readiness_update
-       FROM fire_stations fs
-       LEFT JOIN (
-         SELECT * FROM station_readiness
-         WHERE (station_id, submitted_at) IN (
-           SELECT station_id, MAX(submitted_at) 
-           FROM station_readiness 
-           GROUP BY station_id
-         )
-       ) r ON fs.station_id = r.station_id
-       LEFT JOIN users u ON r.submitted_by_user_id = u.user_id
-       ORDER BY fs.station_type DESC, fs.station_name ASC`
-    );
+    if (stationsError) throw stationsError;
 
-    connection.release();
+    // For each station, get latest readiness
+    const overview = await Promise.all(stations.map(async (station) => {
+      const { data: latestReadiness } = await supabase
+        .from('station_readiness')
+        .select(`
+          *,
+          users!submitted_by_user_id (first_name, last_name)
+        `)
+        .eq('station_id', station.station_id)
+        .order('submitted_at', { ascending: false })
+        .limit(1)
+        .single();
 
-    const overview = results.map(row => ({
-      stationId: row.station_id,
-      stationName: row.station_name,
-      stationType: row.station_type,
-      isReady: row.is_ready === 1,
-      readinessStatus: row.readiness_status,
-      readinessPercentage: row.readiness_percentage,
-      lastSubmittedBy: `${row.last_submitted_by_first_name} ${row.last_submitted_by_last_name}`,
-      lastReadinessUpdate: row.last_readiness_update,
-      lastStatusUpdate: row.last_status_update
+      return {
+        stationId: station.station_id,
+        stationName: station.station_name,
+        stationType: station.station_type,
+        isReady: station.is_ready || false,
+        readinessStatus: latestReadiness?.status || 'UNKNOWN',
+        readinessPercentage: latestReadiness?.readiness_percentage || 0,
+        lastSubmittedBy: latestReadiness 
+          ? `${latestReadiness.users.first_name} ${latestReadiness.users.last_name}`
+          : 'N/A',
+        lastReadinessUpdate: latestReadiness?.submitted_at,
+        lastStatusUpdate: station.last_status_update
+      };
     }));
 
     res.json({ overview });

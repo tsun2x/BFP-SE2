@@ -3,7 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import { createServer } from 'http';
 import { Server as SocketIOServer } from 'socket.io';
-import { pool } from './config/database.js';
+import { supabase, db } from './config/supabase.js';
 import authRoutes from './routes/authRoutes.js';
 import incidentRoutes from './routes/incidentRoutes.js';
 import fireStationsRoutes from './routes/fireStations.js';
@@ -25,8 +25,9 @@ const io = new SocketIOServer(httpServer, {
   cors: { origin: '*' }
 });
 
-// Expose io to routes via app.get('io')
+// Expose io and db to routes via app
 app.set('io', io);
+app.set('db', db);
 
 io.on('connection', (socket) => {
   console.log('Socket connected:', socket.id);
@@ -42,30 +43,29 @@ io.on('connection', (socket) => {
   socket.on('new-incident', async (data) => {
     console.log('[Socket] Received new-incident event:', data);
     try {
-      const connection = await pool.getConnection();
-
       // Check if caller exists or create new end user
-      let [callerRows] = await connection.query(
-        'SELECT user_id FROM users WHERE phone_number = ?',
-        [data.phoneNumber]
-      );
-
+      let caller = await db.getUser(data.phoneNumber);
       let callerId;
 
-      if (callerRows.length === 0) {
+      if (!caller) {
         // Create new end user
         const names = `${data.firstName || ''} ${data.lastName || ''}`.trim().split(' ');
         const fname = names[0] || 'Unknown';
         const lname = names[1] || 'Caller';
         const fullName = `${fname} ${lname}`;
         
-        const [insertResult] = await connection.query(
-          'INSERT INTO users (first_name, last_name, full_name, phone_number, password, role, email) VALUES (?, ?, ?, ?, ?, ?, ?)',
-          [fname, lname, fullName, data.phoneNumber, 'temp_' + Date.now(), 'end_user', `caller_${Date.now()}@bfp.gov`]
-        );
-        callerId = insertResult.insertId;
+        const newUser = await db.createUser({
+          first_name: fname,
+          last_name: lname,
+          full_name: fullName,
+          phone_number: data.phoneNumber,
+          password: 'temp_' + Date.now(),
+          role: 'end_user',
+          email: `caller_${Date.now()}@bfp.gov`
+        });
+        callerId = newUser.user_id;
       } else {
-        callerId = callerRows[0].user_id;
+        callerId = caller.user_id;
       }
 
       // Map alarm level format
@@ -74,44 +74,25 @@ io.on('connection', (socket) => {
         : 'Alarm 1';
 
       // Create the alarm/incident record
-      const [alarmResult] = await connection.query(
-        `INSERT INTO alarms (
-          end_user_id,
-          user_latitude,
-          user_longitude,
-          initial_alarm_level,
-          current_alarm_level,
-          status
-        ) VALUES (?, ?, ?, ?, ?, ?)`,
-        [
-          callerId,
-          data.coordinates?.latitude || data.coordinates?.lat || 0,
-          data.coordinates?.longitude || data.coordinates?.lng || 0,
-          alarmLevelEnum,
-          alarmLevelEnum,
-          'Pending Dispatch'
-        ]
-      );
+      const alarmData = await db.createAlarm({
+        end_user_id: callerId,
+        user_latitude: data.coordinates?.latitude || data.coordinates?.lat || 0,
+        user_longitude: data.coordinates?.longitude || data.coordinates?.lng || 0,
+        initial_alarm_level: alarmLevelEnum,
+        current_alarm_level: alarmLevelEnum,
+        status: 'Pending Dispatch'
+      });
 
-      const alarmId = alarmResult.insertId;
+      const alarmId = alarmData.alarm_id;
 
       // Log the incident creation
-      await connection.query(
-        `INSERT INTO alarm_response_log (
-          alarm_id,
-          action_type,
-          details,
-          performed_by_user_id
-        ) VALUES (?, ?, ?, ?)`,
-        [
-          alarmId,
-          'Received from Station',
-          `Incident: ${data.incidentType || 'Not specified'} | Location: ${data.location} | Narrative: ${data.narrative || 'No details'}`,
-          null // No authenticated user for socket events; set to NULL to avoid FK errors
-        ]
-      );
+      await db.logAlarmResponse({
+        alarm_id: alarmId,
+        action_type: 'Received from Station',
+        details: `Incident: ${data.incidentType || 'Not specified'} | Location: ${data.location} | Narrative: ${data.narrative || 'No details'}`,
+        performed_by_user_id: null
+      });
 
-      connection.release();
       console.log('[Socket] Incident saved to database - alarmId:', alarmId);
     } catch (error) {
       console.error('[Socket] Error saving incident to database:', error);
@@ -138,13 +119,17 @@ app.use('/api', firetruckRoutes);
 
 app.get('/api/health', async (req, res) => {
   try {
-    const connection = await pool.getConnection();
-    await connection.query('SELECT 1');
-    connection.release();
+    // Test Supabase connection
+    const { data, error } = await supabase
+      .from('users')
+      .select('count(*)', { count: 'exact', head: true });
+    
+    if (error) throw error;
+    
     res.json({ 
       status: 'OK', 
       message: 'Server is running',
-      database: 'Connected to MySQL'
+      database: 'Connected to Supabase'
     });
   } catch (error) {
     console.error('Database connection error:', error);
@@ -159,4 +144,5 @@ app.get('/api/health', async (req, res) => {
 // Start HTTP server (with Socket.IO)
 httpServer.listen(PORT, () => {
   console.log(`Server is running on http://localhost:${PORT}`);
+  console.log(`Database: Supabase`);
 });

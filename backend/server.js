@@ -3,7 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import { createServer } from 'http';
 import { Server as SocketIOServer } from 'socket.io';
-import { pool } from './config/database.js';
+import { supabase } from './supabaseClient.js';
 import authRoutes from './routes/authRoutes.js';
 import incidentRoutes from './routes/incidentRoutes.js';
 import fireStationsRoutes from './routes/fireStations.js';
@@ -35,30 +35,39 @@ io.on('connection', (socket) => {
   socket.on('new-incident', async (data) => {
     console.log('[Socket] Received new-incident event:', data);
     try {
-      const connection = await pool.getConnection();
-
       // Check if caller exists or create new end user
-      let [callerRows] = await connection.query(
-        'SELECT user_id FROM users WHERE phone_number = ?',
-        [data.phoneNumber]
-      );
+      const { data: callerRows } = await supabase
+        .from('users')
+        .select('user_id')
+        .eq('phone_number', data.phoneNumber)
+        .single();
 
       let callerId;
 
-      if (callerRows.length === 0) {
+      if (!callerRows) {
         // Create new end user
         const names = `${data.firstName || ''} ${data.lastName || ''}`.trim().split(' ');
         const fname = names[0] || 'Unknown';
         const lname = names[1] || 'Caller';
         const fullName = `${fname} ${lname}`;
         
-        const [insertResult] = await connection.query(
-          'INSERT INTO users (first_name, last_name, full_name, phone_number, password, role, email) VALUES (?, ?, ?, ?, ?, ?, ?)',
-          [fname, lname, fullName, data.phoneNumber, 'temp_' + Date.now(), 'end_user', `caller_${Date.now()}@bfp.gov`]
-        );
-        callerId = insertResult.insertId;
+        const { data: newUser } = await supabase
+          .from('users')
+          .insert([{
+            first_name: fname,
+            last_name: lname,
+            full_name: fullName,
+            phone_number: data.phoneNumber,
+            password: 'temp_' + Date.now(),
+            role: 'end_user',
+            email: `caller_${Date.now()}@bfp.gov`
+          }])
+          .select('user_id')
+          .single();
+        
+        callerId = newUser?.user_id;
       } else {
-        callerId = callerRows[0].user_id;
+        callerId = callerRows.user_id;
       }
 
       // Map alarm level format
@@ -67,44 +76,21 @@ io.on('connection', (socket) => {
         : 'Alarm 1';
 
       // Create the alarm/incident record
-      const [alarmResult] = await connection.query(
-        `INSERT INTO alarms (
-          end_user_id,
-          user_latitude,
-          user_longitude,
-          initial_alarm_level,
-          current_alarm_level,
-          status
-        ) VALUES (?, ?, ?, ?, ?, ?)`,
-        [
-          callerId,
-          data.coordinates?.latitude || data.coordinates?.lat || 0,
-          data.coordinates?.longitude || data.coordinates?.lng || 0,
-          alarmLevelEnum,
-          alarmLevelEnum,
-          'Pending Dispatch'
-        ]
-      );
+      const { data: alarmResult } = await supabase
+        .from('_alarms')
+        .insert([{
+          end_user_id: callerId,
+          user_latitude: data.coordinates?.latitude || data.coordinates?.lat || 0,
+          user_longitude: data.coordinates?.longitude || data.coordinates?.lng || 0,
+          initial_alarm_level: alarmLevelEnum,
+          current_alarm_level: alarmLevelEnum,
+          status: 'Pending Dispatch'
+        }])
+        .select('alarm_id')
+        .single();
 
-      const alarmId = alarmResult.insertId;
+      const alarmId = alarmResult?.alarm_id;
 
-      // Log the incident creation
-      await connection.query(
-        `INSERT INTO alarm_response_log (
-          alarm_id,
-          action_type,
-          details,
-          performed_by_user_id
-        ) VALUES (?, ?, ?, ?)`,
-        [
-          alarmId,
-          'Received from Station',
-          `Incident: ${data.incidentType || 'Not specified'} | Location: ${data.location} | Narrative: ${data.narrative || 'No details'}`,
-          null // No authenticated user for socket events; set to NULL to avoid FK errors
-        ]
-      );
-
-      connection.release();
       console.log('[Socket] Incident saved to database - alarmId:', alarmId);
       
       // Broadcast the incident to all connected clients (stations, admins, end-users)
@@ -119,80 +105,6 @@ io.on('connection', (socket) => {
       });
     } catch (error) {
       console.error('[Socket] Error saving incident to database:', error);
-    }
-  });
-
-  // ============================================================
-  // FIRETRUCK LIVE TRACKING - Real-time location updates
-  // ============================================================
-  // Firetruck sends location updates via Socket.IO
-  // This gets broadcasted to: end-user (see truck on map), other stations, admins
-  socket.on('firetruck-location-update', async (data) => {
-    console.log('[Socket] Received firetruck-location-update:', data);
-    try {
-      const { truck_id, latitude, longitude, battery_level, alarm_id, speed, heading } = data;
-
-      if (!truck_id || latitude === undefined || longitude === undefined) {
-        console.error('[Socket] Missing required fields for firetruck update');
-        return;
-      }
-
-      const connection = await pool.getConnection();
-
-      try {
-        // Update firetruck in database
-        await connection.query(
-          `UPDATE firetrucks 
-           SET current_latitude = ?, 
-               current_longitude = ?, 
-               last_online = NOW(),
-               battery_level = ?,
-               last_location_update = NOW(),
-               current_alarm_id = ?,
-               is_active = 1,
-               status = ?
-           WHERE truck_id = ?`,
-          [
-            latitude,
-            longitude,
-            battery_level || null,
-            alarm_id || null,
-            alarm_id ? 'on_mission' : 'available',
-            truck_id
-          ]
-        );
-
-        // Get updated firetruck info for broadcast
-        const [truck] = await connection.query(
-          `SELECT f.*, fs.station_name, a.user_latitude, a.user_longitude, a.status as alarm_status
-           FROM firetrucks f
-           LEFT JOIN fire_stations fs ON f.station_id = fs.station_id
-           LEFT JOIN alarms a ON f.current_alarm_id = a.alarm_id
-           WHERE f.truck_id = ?`,
-          [truck_id]
-        );
-
-        connection.release();
-
-        // Broadcast to all connected clients (real-time map update)
-        io.emit('firetruck-location', {
-          truck_id,
-          latitude,
-          longitude,
-          battery_level,
-          status: alarm_id ? 'on_mission' : 'available',
-          alarm_id: alarm_id || null,
-          station_name: truck[0]?.station_name,
-          timestamp: new Date().toISOString()
-        });
-
-        console.log('[Socket] Firetruck location broadcasted:', truck_id);
-      } catch (error) {
-        connection.release();
-        throw error;
-      }
-    } catch (error) {
-      console.error('[Socket] Error updating firetruck location:', error);
     }
   });
 
@@ -228,13 +140,20 @@ app.use('/api', compatibilityRoutes);
 
 app.get('/api/health', async (req, res) => {
   try {
-    const connection = await pool.getConnection();
-    await connection.query('SELECT 1');
-    connection.release();
+    const { error } = await supabase.from('users').select('count()', { count: 'exact' });
+    
+    if (error) {
+      return res.status(500).json({ 
+        status: 'ERROR', 
+        message: 'Failed to connect to database',
+        error: error.message
+      });
+    }
+
     res.json({ 
       status: 'OK', 
       message: 'Server is running',
-      database: 'Connected to MySQL'
+      database: 'Connected to Supabase'
     });
   } catch (error) {
     console.error('Database connection error:', error);

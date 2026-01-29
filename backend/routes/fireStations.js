@@ -1,5 +1,5 @@
 import express from 'express';
-import { pool } from '../config/database.js';
+import { supabase } from '../supabaseClient.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { requireRole } from '../middleware/role.js';
 
@@ -9,7 +9,13 @@ const router = express.Router();
 router.get('/firestations', async (req, res) => {
   try {
     console.log('[GET /firestations] Request received');
-    const [rows] = await pool.query('SELECT station_id, station_name, province, city, contact_number, latitude, longitude, station_type FROM fire_stations ORDER BY station_name ASC');
+    const { data: rows, error } = await supabase
+      .from('_fire_stations')
+      .select('*')
+      .order('station_name', { ascending: true });
+    
+    if (error) throw error;
+    
     console.log('[GET /firestations] Query returned', rows.length, 'stations');
     res.json({ stations: rows });
   } catch (error) {
@@ -22,9 +28,14 @@ router.get('/firestations', async (req, res) => {
 router.get('/firestations/:id', async (req, res) => {
   try {
     const stationId = req.params.id;
-    const [rows] = await pool.query('SELECT station_id, station_name, province, city, contact_number, latitude, longitude, station_type FROM fire_stations WHERE station_id = ?', [stationId]);
-    if (rows.length === 0) return res.status(404).json({ message: 'Station not found' });
-    res.json({ station: rows[0] });
+    const { data: rows, error } = await supabase
+      .from('_fire_stations')
+      .select('*')
+      .eq('station_id', stationId)
+      .single();
+    
+    if (error || !rows) return res.status(404).json({ message: 'Station not found' });
+    res.json({ station: rows });
   } catch (error) {
     console.error('Get station error:', error);
     res.status(500).json({ message: 'Failed to retrieve station', error: error.message });

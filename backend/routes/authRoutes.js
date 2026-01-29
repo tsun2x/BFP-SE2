@@ -2,7 +2,7 @@ import express from 'express';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { randomUUID } from 'crypto';
-import { pool } from '../config/database.js';
+import { supabase } from '../supabaseClient.js';
 import { authenticateToken } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -20,23 +20,20 @@ router.post('/login', async (req, res) => {
       });
     }
 
-    const connection = await pool.getConnection();
+    // Query users table in Supabase
+    const { data: rows, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('id_number', idNumber)
+      .single();
 
-    // Check if user exists
-    const [rows] = await connection.query(
-      'SELECT * FROM users WHERE id_number = ?',
-      [idNumber]
-    );
-
-    connection.release();
-
-    if (rows.length === 0) {
+    if (error || !rows) {
       return res.status(401).json({
         message: 'Invalid ID Number or password'
       });
     }
 
-    const user = rows[0];
+    const user = rows;
 
     // Compare password
     const passwordMatch = await bcrypt.compare(password, user.password);
@@ -64,11 +61,12 @@ router.post('/login', async (req, res) => {
     // Fetch station info if user is assigned to a station
     let stationInfo = null;
     if (user.assigned_station_id) {
-      const [stations] = await pool.query(
-        'SELECT station_id, station_name, contact_number, latitude, longitude, station_type FROM fire_stations WHERE station_id = ?',
-        [user.assigned_station_id]
-      );
-      stationInfo = stations.length > 0 ? stations[0] : null;
+      const { data: stations } = await supabase
+        .from('_fire_stations')
+        .select('*')
+        .eq('station_id', user.assigned_station_id)
+        .single();
+      stationInfo = stations || null;
     }
 
     res.json({
@@ -108,16 +106,14 @@ router.post('/signup', async (req, res) => {
       });
     }
 
-    const connection = await pool.getConnection();
-
     // Check if user already exists
-    const [existingUser] = await connection.query(
-      'SELECT * FROM users WHERE id_number = ?',
-      [idNumber]
-    );
+    const { data: existingUser, error: checkError } = await supabase
+      .from('users')
+      .select('user_id')
+      .eq('id_number', idNumber)
+      .single();
 
-    if (existingUser.length > 0) {
-      connection.release();
+    if (existingUser) {
       return res.status(400).json({
         message: 'User with this ID already exists'
       });
@@ -129,6 +125,7 @@ router.post('/signup', async (req, res) => {
     // Create full name and a placeholder phone number (DB requires phone_number NOT NULL)
     const fullName = `${firstName} ${lastName}`.trim();
     const placeholderPhone = `signup_${randomUUID().substring(0, 12)}`; // unique placeholder to satisfy NOT NULL + unique constraints
+    
     // Determine role based on optional role or stationType provided
     // Default to 'end_user' when not specified
     let role = 'end_user';
@@ -140,12 +137,28 @@ router.post('/signup', async (req, res) => {
 
     // Insert new user (include assigned_station_id if provided)
     const assignedStationId = req.body.assignedStationId || null;
-    await connection.query(
-      'INSERT INTO users (first_name, last_name, id_number, rank, substation, full_name, phone_number, password, role, assigned_station_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [firstName, lastName, idNumber, rank, req.body.substation || null, fullName, placeholderPhone, hashedPassword, role, assignedStationId]
-    );
+    const { data: newUser, error: insertError } = await supabase
+      .from('users')
+      .insert([{
+        first_name: firstName,
+        last_name: lastName,
+        id_number: idNumber,
+        rank: rank,
+        substation: req.body.substation || null,
+        full_name: fullName,
+        phone_number: placeholderPhone,
+        password: hashedPassword,
+        role: role,
+        assigned_station_id: assignedStationId
+      }])
+      .select();
 
-    connection.release();
+    if (insertError) {
+      return res.status(500).json({
+        message: 'Failed to register user',
+        error: insertError.message
+      });
+    }
 
     res.status(201).json({
       message: 'User registered successfully. Please login.'

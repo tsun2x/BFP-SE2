@@ -103,7 +103,7 @@ router.delete('/firestations/:id', authenticateToken, requireRole('admin'), asyn
   try {
     const stationId = req.params.id;
     const { error } = await supabase
-      .from('fire_stations')
+      .from('_fire_stations')
       .delete()
       .eq('station_id', stationId);
 

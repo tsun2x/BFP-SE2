@@ -183,9 +183,9 @@ router.post('/signup-station', async (req, res) => {
     // Validate: if stationType='Main', check if Main already exists
     if (stationType === 'Main') {
       const { data: mainStations, error } = await supabase
-        .from('fire_stations')
+        .from('_fire_stations')
         .select('station_id', { count: 'exact' })
-        .eq('station_type', 'Main');
+        .limit(1);
       
       if (!error && mainStations && mainStations.length > 0) {
         // If a Main already exists, only allow creation by an authenticated admin

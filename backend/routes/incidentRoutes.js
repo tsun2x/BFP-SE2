@@ -1,5 +1,5 @@
 import express from 'express';
-import { pool } from '../config/database.js';
+import { supabase } from '../supabaseClient.js';
 import { authenticateToken } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -34,32 +34,44 @@ router.post('/create-incident', authenticateToken, async (req, res) => {
       });
     }
 
-    const connection = await pool.getConnection();
+    // Check if caller exists or create new end user via Supabase
+    const { data: callerRows, error: callerErr } = await supabase
+      .from('users')
+      .select('user_id')
+      .eq('phone_number', phoneNumber)
+      .limit(1);
 
-    try {
-      // Check if caller exists or create new end user
-      let [callerRows] = await connection.query(
-        'SELECT user_id FROM users WHERE phone_number = ?',
-        [phoneNumber]
-      );
+    if (callerErr) throw callerErr;
 
-      let callerId;
+    let callerId;
 
-      if (callerRows.length === 0) {
-        // Create new end user
-        const names = `${firstName || ''} ${lastName || ''}`.trim().split(' ');
-        const fname = names[0] || 'Unknown';
-        const lname = names[1] || 'Caller';
-        const fullName = `${fname} ${lname}`;
-        
-        const [insertResult] = await connection.query(
-          'INSERT INTO users (first_name, last_name, full_name, phone_number, password, role, email) VALUES (?, ?, ?, ?, ?, ?, ?)',
-          [fname, lname, fullName, phoneNumber, 'temp_' + Date.now(), 'end_user', `caller_${Date.now()}@bfp.gov`]
-        );
-        callerId = insertResult.insertId;
-      } else {
-        callerId = callerRows[0].user_id;
-      }
+    if (!callerRows || callerRows.length === 0) {
+      const names = `${firstName || ''} ${lastName || ''}`.trim().split(' ');
+      const fname = names[0] || 'Unknown';
+      const lname = names[1] || 'Caller';
+      const fullName = `${fname} ${lname}`;
+
+      const { data: insertResult, error: insertError } = await supabase
+        .from('users')
+        .insert([
+          {
+            first_name: fname,
+            last_name: lname,
+            full_name: fullName,
+            phone_number: phoneNumber,
+            password: 'temp_' + Date.now(),
+            role: 'end_user',
+            email: `caller_${Date.now()}@bfp.gov`
+          }
+        ])
+        .select('user_id')
+        .single();
+
+      if (insertError) throw insertError;
+      callerId = insertResult.user_id;
+    } else {
+      callerId = callerRows[0].user_id;
+    }
 
       // Map incident type to alarm level if not provided
       const alarmLevelEnum = alarmLevel.includes('Alarm') 
@@ -67,44 +79,36 @@ router.post('/create-incident', authenticateToken, async (req, res) => {
         : 'Alarm 1';
 
       // Create the alarm/incident
-      const [alarmResult] = await connection.query(
-        `INSERT INTO alarms (
-          end_user_id,
-          user_latitude,
-          user_longitude,
-          initial_alarm_level,
-          current_alarm_level,
-          status
-        ) VALUES (?, ?, ?, ?, ?, ?)`,
-        [
-          callerId,
-          latitude,
-          longitude,
-          alarmLevelEnum,
-          alarmLevelEnum,
-          'Pending Dispatch'
-        ]
-      );
+    const { data: alarmResult, error: alarmErr } = await supabase
+      .from('alarms')
+      .insert([
+        {
+          end_user_id: callerId,
+          user_latitude: latitude,
+          user_longitude: longitude,
+          initial_alarm_level: alarmLevelEnum,
+          current_alarm_level: alarmLevelEnum,
+          status: 'Pending Dispatch'
+        }
+      ])
+      .select('alarm_id')
+      .single();
 
-      const alarmId = alarmResult.insertId;
+    if (alarmErr) throw alarmErr;
 
-      // Log the incident creation
-      await connection.query(
-        `INSERT INTO alarm_response_log (
-          alarm_id,
-          action_type,
-          details,
-          performed_by_user_id
-        ) VALUES (?, ?, ?, ?)`,
-        [
-          alarmId,
-          'Initial Dispatch',
-          `Incident: ${incidentType || 'Not specified'} | Location: ${location} | Narrative: ${narrative || 'No details'}`,
-          req.user.id
-        ]
-      );
+    const alarmId = alarmResult.alarm_id;
 
-      connection.release();
+    // Log the incident creation
+    const { error: logErr } = await supabase.from('alarm_response_log').insert([
+      {
+        alarm_id: alarmId,
+        action_type: 'Initial Dispatch',
+        details: `Incident: ${incidentType || 'Not specified'} | Location: ${location} | Narrative: ${narrative || 'No details'}`,
+        performed_by_user_id: req.user.id
+      }
+    ]);
+
+    if (logErr) throw logErr;
 
       // Broadcast to connected clients so other stations receive the incident
       try {
@@ -138,10 +142,6 @@ router.post('/create-incident', authenticateToken, async (req, res) => {
           longitude
         }
       });
-    } catch (error) {
-      connection.release();
-      throw error;
-    }
   } catch (error) {
     console.error('Create incident error:', error);
     res.status(500).json({
@@ -154,48 +154,37 @@ router.post('/create-incident', authenticateToken, async (req, res) => {
 // Get all incidents/alarms
 router.get('/incidents', authenticateToken, async (req, res) => {
   try {
-    const connection = await pool.getConnection();
+    // Fetch alarms with related user/station/truck/log details (embeds require foreign keys)
+    const { data: alarms, error: alarmsErr } = await supabase
+      .from('alarms')
+      .select(
+        `alarm_id,end_user_id,user_latitude,user_longitude,initial_alarm_level,current_alarm_level,status,call_time,dispatch_time,resolve_time,users(full_name,phone_number),fire_stations(station_name),firetrucks(plate_number),alarm_response_log(details)`
+      )
+      .order('call_time', { ascending: false })
+      .limit(50);
 
-    const [alarms] = await connection.query(
-      `SELECT 
-        a.alarm_id,
-        a.end_user_id,
-        u.full_name,
-        u.phone_number,
-        a.user_latitude,
-        a.user_longitude,
-        a.initial_alarm_level,
-        a.current_alarm_level,
-        a.status,
-        a.call_time,
-        a.dispatch_time,
-        a.resolve_time,
-        fs.station_name,
-        ft.plate_number,
-        ar.details
-      FROM alarms a
-      JOIN users u ON a.end_user_id = u.user_id
-      LEFT JOIN fire_stations fs ON a.dispatched_station_id = fs.station_id
-      LEFT JOIN firetrucks ft ON a.dispatched_truck_id = ft.truck_id
-      LEFT JOIN (
-        SELECT t1.alarm_id, t1.details
-        FROM alarm_response_log t1
-        JOIN (
-          SELECT alarm_id, MIN(log_id) AS first_log_id
-          FROM alarm_response_log
-          GROUP BY alarm_id
-        ) t2 ON t1.alarm_id = t2.alarm_id AND t1.log_id = t2.first_log_id
-      ) ar ON ar.alarm_id = a.alarm_id
-      ORDER BY a.call_time DESC
-      LIMIT 50`
-    );
+    if (alarmsErr) throw alarmsErr;
 
-    connection.release();
+    // Flatten embedded relations for response
+    const flattened = (alarms || []).map(a => ({
+      alarm_id: a.alarm_id,
+      end_user_id: a.end_user_id,
+      full_name: a.users?.[0]?.full_name || null,
+      phone_number: a.users?.[0]?.phone_number || null,
+      user_latitude: a.user_latitude,
+      user_longitude: a.user_longitude,
+      initial_alarm_level: a.initial_alarm_level,
+      current_alarm_level: a.current_alarm_level,
+      status: a.status,
+      call_time: a.call_time,
+      dispatch_time: a.dispatch_time,
+      resolve_time: a.resolve_time,
+      station_name: a.fire_stations?.[0]?.station_name || null,
+      plate_number: a.firetrucks?.[0]?.plate_number || null,
+      details: a.alarm_response_log?.[0]?.details || null
+    }));
 
-    res.json({
-      incidents: alarms,
-      total: alarms.length
-    });
+    res.json({ incidents: flattened, total: flattened.length });
   } catch (error) {
     console.error('Get incidents error:', error);
     res.status(500).json({
@@ -210,53 +199,27 @@ router.get('/incidents/:alarmId', authenticateToken, async (req, res) => {
   try {
     const { alarmId } = req.params;
 
-    const connection = await pool.getConnection();
+    const { data: alarms, error: alarmErr } = await supabase
+      .from('alarms')
+      .select('alarm_id,end_user_id,user_latitude,user_longitude,initial_alarm_level,current_alarm_level,status,call_time,dispatch_time,resolve_time,users(full_name,phone_number)')
+      .eq('alarm_id', alarmId)
+      .limit(1);
 
-    const [alarms] = await connection.query(
-      `SELECT 
-        a.alarm_id,
-        a.end_user_id,
-        u.full_name,
-        u.phone_number,
-        a.user_latitude,
-        a.user_longitude,
-        a.initial_alarm_level,
-        a.current_alarm_level,
-        a.status,
-        a.call_time,
-        a.dispatch_time,
-        a.resolve_time
-      FROM alarms a
-      JOIN users u ON a.end_user_id = u.user_id
-      WHERE a.alarm_id = ?`,
-      [alarmId]
-    );
+    if (alarmErr) throw alarmErr;
 
-    const [logs] = await connection.query(
-      `SELECT 
-        log_id,
-        action_timestamp,
-        action_type,
-        details,
-        performed_by_user_id
-      FROM alarm_response_log
-      WHERE alarm_id = ?
-      ORDER BY action_timestamp DESC`,
-      [alarmId]
-    );
-
-    connection.release();
-
-    if (alarms.length === 0) {
-      return res.status(404).json({
-        message: 'Incident not found'
-      });
+    if (!alarms || alarms.length === 0) {
+      return res.status(404).json({ message: 'Incident not found' });
     }
 
-    res.json({
-      incident: alarms[0],
-      timeline: logs
-    });
+    const { data: logs, error: logsErr } = await supabase
+      .from('alarm_response_log')
+      .select('log_id,action_timestamp,action_type,details,performed_by_user_id')
+      .eq('alarm_id', alarmId)
+      .order('action_timestamp', { ascending: false });
+
+    if (logsErr) throw logsErr;
+
+    res.json({ incident: alarms[0], timeline: logs || [] });
   } catch (error) {
     console.error('Get incident details error:', error);
     res.status(500).json({
@@ -278,30 +241,25 @@ router.patch('/incidents/:alarmId/update-alarm-level', authenticateToken, async 
       });
     }
 
-    const connection = await pool.getConnection();
+    const { error: updateErr } = await supabase
+      .from('alarms')
+      .update({ current_alarm_level: newAlarmLevel })
+      .eq('alarm_id', alarmId);
 
-    await connection.query(
-      'UPDATE alarms SET current_alarm_level = ? WHERE alarm_id = ?',
-      [newAlarmLevel, alarmId]
-    );
+    if (updateErr) throw updateErr;
 
-    await connection.query(
-      `INSERT INTO alarm_response_log (
-        alarm_id,
-        action_type,
-        details,
-        performed_by_user_id
-      ) VALUES (?, ?, ?, ?)`,
-      [alarmId, 'Alarm Level Change', `Changed to ${newAlarmLevel}`, req.user.id]
-    );
+    const { error: logInsertErr } = await supabase.from('alarm_response_log').insert([
+      {
+        alarm_id: alarmId,
+        action_type: 'Alarm Level Change',
+        details: `Changed to ${newAlarmLevel}`,
+        performed_by_user_id: req.user.id
+      }
+    ]);
 
-    connection.release();
+    if (logInsertErr) throw logInsertErr;
 
-    res.json({
-      message: 'Alarm level updated',
-      alarmId,
-      newAlarmLevel
-    });
+    res.json({ message: 'Alarm level updated', alarmId, newAlarmLevel });
   } catch (error) {
     console.error('Update alarm level error:', error);
     res.status(500).json({

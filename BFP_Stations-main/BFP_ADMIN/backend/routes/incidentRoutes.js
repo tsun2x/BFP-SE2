@@ -264,7 +264,7 @@ router.post('/enduser/create-alarm', async (req, res) => {
 
       if (forcedId) {
         const { data: forcedStations, error: forcedError } = await supabase
-          .from('fire_stations')
+          .from('_fire_stations')
           .select('station_id, latitude, longitude')
           .eq('station_id', forcedId)
           .eq('is_ready', true)
@@ -293,7 +293,7 @@ router.post('/enduser/create-alarm', async (req, res) => {
         dispatchedStationId = forcedId;
       } else {
         const { data: stations, error: stationsError } = await supabase
-          .from('fire_stations')
+          .from('_fire_stations')
           .select('station_id, latitude, longitude, is_ready')
           .eq('is_ready', true);
 

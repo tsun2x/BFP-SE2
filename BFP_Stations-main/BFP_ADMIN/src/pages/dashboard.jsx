@@ -63,7 +63,7 @@ export default function Dashboard() {
           </div>
 
           <div className="stat-icon">
-            <i class="fa-solid fa-paper-plane"></i>
+            <i className="fa-solid fa-paper-plane"></i>
           </div>
         </div>
 
@@ -76,7 +76,7 @@ export default function Dashboard() {
           </div>
 
           <div className="stat-icon">
-            <i class="fa-solid fa-user"></i>
+            <i className="fa-solid fa-user"></i>
           </div>
         </div>
 

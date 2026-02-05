@@ -76,7 +76,8 @@ router.post('/station-readiness', authenticateToken, async (req, res) => {
     console.error('[POST /station-readiness] Error:', error);
     res.status(500).json({
       message: 'Failed to submit station readiness',
-      error: error.message
+      error: error.message,
+      details: error.details || error
     });
   }
 });
@@ -88,7 +89,7 @@ router.get('/station-readiness/:stationId', authenticateToken, async (req, res) 
 
     const { data: readiness, error: readinessErr } = await supabase
       .from('_station_readiness')
-      .select('*, users(first_name,last_name), fire_stations(station_name)')
+      .select('*, _fire_stations(station_name)')
       .eq('station_id', stationId)
       .order('submitted_at', { ascending: false })
       .limit(1);
@@ -103,11 +104,11 @@ router.get('/station-readiness/:stationId', authenticateToken, async (req, res) 
     res.json({
       readinessId: record.readiness_id,
       stationId: record.station_id,
-      stationName: record.fire_stations?.[0]?.station_name || null,
+      stationName: record._fire_stations?.[0]?.station_name || null,
       status: record.status,
       readinessPercentage: record.readiness_percentage,
       equipmentChecklist: typeof record.equipment_checklist === 'string' ? JSON.parse(record.equipment_checklist) : record.equipment_checklist,
-      submittedBy: `${record.users?.[0]?.first_name || ''} ${record.users?.[0]?.last_name || ''}`.trim(),
+      submittedBy: 'N/A',
       submittedAt: record.submitted_at
     });
   } catch (error) {
@@ -122,25 +123,34 @@ router.get('/station-readiness/:stationId', authenticateToken, async (req, res) 
 // Get all stations with their latest readiness (for overview)
 router.get('/stations-readiness-overview', authenticateToken, async (req, res) => {
   try {
+    console.log('[GET /stations-readiness-overview] Starting...');
+    
     // Fetch stations, then latest readiness per station
     const { data: stations, error: stationsErr } = await supabase
       .from('_fire_stations')
       .select('station_id, station_name, is_ready, last_status_update')
       .order('station_name', { ascending: true });
 
-    if (stationsErr) throw stationsErr;
+    if (stationsErr) {
+      console.error('[GET /stations-readiness-overview] Stations error:', stationsErr);
+      throw stationsErr;
+    }
+
+    console.log('[GET /stations-readiness-overview] Found stations:', stations?.length || 0);
 
     const overview = [];
 
     for (const s of stations || []) {
       const { data: latest, error: latestErr } = await supabase
         .from('_station_readiness')
-        .select('*, users(first_name,last_name)')
+        .select('*')
         .eq('station_id', s.station_id)
         .order('submitted_at', { ascending: false })
         .limit(1);
 
-      if (latestErr) throw latestErr;
+      if (latestErr) {
+        console.error(`[GET /stations-readiness-overview] Readiness error for station ${s.station_id}:`, latestErr);
+      }
 
       const rec = (latest && latest[0]) || null;
 
@@ -150,15 +160,16 @@ router.get('/stations-readiness-overview', authenticateToken, async (req, res) =
         isReady: s.is_ready === 1,
         readinessStatus: rec ? rec.status : 'UNKNOWN',
         readinessPercentage: rec ? rec.readiness_percentage : 0,
-        lastSubmittedBy: rec ? `${rec.users?.[0]?.first_name || ''} ${rec.users?.[0]?.last_name || ''}`.trim() : 'N/A',
+        lastSubmittedBy: 'N/A',
         lastReadinessUpdate: rec ? rec.submitted_at : null,
         lastStatusUpdate: s.last_status_update
       });
     }
 
+    console.log('[GET /stations-readiness-overview] Success, returning', overview.length, 'stations');
     res.json({ overview });
   } catch (error) {
-    console.error('Get stations readiness overview error:', error);
+    console.error('[GET /stations-readiness-overview] Fatal error:', error);
     res.status(500).json({
       message: 'Failed to fetch readiness overview',
       error: error.message

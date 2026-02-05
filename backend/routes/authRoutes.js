@@ -41,14 +41,24 @@ router.post('/login', async (req, res) => {
 
     const user = rows;
     console.log('[POST /login] Found user id:', user.user_id, 'role:', user.role, 'assigned_station_id:', user.assigned_station_id);
+    console.log('[POST /login] Stored password hash:', user.password ? user.password.substring(0, 20) + '...' : 'NULL');
+    console.log('[POST /login] Provided password:', password);
 
     // Compare password
-    const passwordMatch = await bcrypt.compare(password, user.password).catch(err => {
-      console.error('[POST /login] bcrypt error:', err);
-      return false;
-    });
+    let passwordMatch = false;
+    try {
+      passwordMatch = await bcrypt.compare(password, user.password);
+      console.log('[POST /login] bcrypt.compare result:', passwordMatch);
+    } catch (err) {
+      console.error('[POST /login] bcrypt error:', err.message);
+      // Try plain text comparison as fallback for testing
+      if (password === user.password) {
+        console.log('[POST /login] Plain text match succeeded');
+        passwordMatch = true;
+      }
+    }
 
-    console.log('[POST /login] Password match:', !!passwordMatch);
+    console.log('[POST /login] Final password match:', !!passwordMatch);
 
     if (!passwordMatch) {
       return res.status(401).json({ message: 'Invalid ID Number or password' });

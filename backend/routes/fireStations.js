@@ -57,13 +57,25 @@ router.post('/firestations', authenticateToken, requireRole('admin'), async (req
       return res.status(400).json({ message: 'Latitude and longitude must be valid numbers' });
     }
 
-    // Insert station
-    const [result] = await pool.query(
-      'INSERT INTO fire_stations (station_name, province, city, contact_number, latitude, longitude, station_type) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [stationName, province || null, city || null, contactNumber || null, lat, lng, stationType]
-    );
+    // Insert station via Supabase
+    const { data: insertResult, error: insertErr } = await supabase
+      .from('_fire_stations')
+      .insert([
+        {
+          station_name: stationName,
+          province: province || null,
+          city: city || null,
+          contact_number: contactNumber || null,
+          latitude: lat,
+          longitude: lng
+        }
+      ])
+      .select('station_id')
+      .single();
 
-    const stationId = result.insertId;
+    if (insertErr) throw insertErr;
+
+    const stationId = insertResult.station_id;
     res.status(201).json({ message: 'Station created', stationId });
   } catch (error) {
     console.error('Create station error:', error);
@@ -77,25 +89,30 @@ router.put('/firestations/:id', authenticateToken, requireRole('admin'), async (
     const stationId = req.params.id;
     const { stationName, province, city, contactNumber, latitude, longitude, stationType } = req.body;
 
-    // Build update query dynamically
-    const updates = [];
-    const params = [];
-    if (stationName !== undefined) { updates.push('station_name = ?'); params.push(stationName); }
-    if (province !== undefined) { updates.push('province = ?'); params.push(province); }
-    if (city !== undefined) { updates.push('city = ?'); params.push(city); }
-    if (contactNumber !== undefined) { updates.push('contact_number = ?'); params.push(contactNumber); }
-    if (latitude !== undefined && longitude !== undefined) { updates.push('latitude = ?', 'longitude = ?'); params.push(parseFloat(latitude), parseFloat(longitude)); }
-    if (stationType !== undefined) { updates.push('station_type = ?'); params.push(stationType); }
+    // Build update object
+    const updates = {};
+    if (stationName !== undefined) updates.station_name = stationName;
+    if (province !== undefined) updates.province = province;
+    if (city !== undefined) updates.city = city;
+    if (contactNumber !== undefined) updates.contact_number = contactNumber;
+    if (latitude !== undefined && longitude !== undefined) {
+      updates.latitude = parseFloat(latitude);
+      updates.longitude = parseFloat(longitude);
+    }
 
-    if (updates.length === 0) {
+    if (Object.keys(updates).length === 0) {
       return res.status(400).json({ message: 'No fields provided to update' });
     }
 
-    const query = `UPDATE fire_stations SET ${updates.join(', ')} WHERE station_id = ?`;
-    params.push(stationId);
+    const { data: updatedRows, error: updateErr } = await supabase
+      .from('_fire_stations')
+      .update(updates)
+      .eq('station_id', stationId)
+      .select('station_id');
 
-    const [result] = await pool.query(query, params);
-    if (result.affectedRows === 0) {
+    if (updateErr) throw updateErr;
+
+    if (!updatedRows || updatedRows.length === 0) {
       return res.status(404).json({ message: 'Station not found' });
     }
 
@@ -110,10 +127,18 @@ router.put('/firestations/:id', authenticateToken, requireRole('admin'), async (
 router.delete('/firestations/:id', authenticateToken, requireRole('admin'), async (req, res) => {
   try {
     const stationId = req.params.id;
-    const [result] = await pool.query('DELETE FROM fire_stations WHERE station_id = ?', [stationId]);
-    if (result.affectedRows === 0) {
+    const { data: deleted, error: deleteErr } = await supabase
+      .from('_fire_stations')
+      .delete()
+      .eq('station_id', stationId)
+      .select('station_id');
+
+    if (deleteErr) throw deleteErr;
+
+    if (!deleted || deleted.length === 0) {
       return res.status(404).json({ message: 'Station not found' });
     }
+
     res.json({ message: 'Station deleted' });
   } catch (error) {
     console.error('Delete station error:', error);

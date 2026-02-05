@@ -20,6 +20,8 @@ router.post('/login', async (req, res) => {
       });
     }
 
+    console.log('[POST /login] Attempt login for idNumber:', idNumber);
+
     // Query users table in Supabase
     const { data: rows, error } = await supabase
       .from('users')
@@ -27,21 +29,39 @@ router.post('/login', async (req, res) => {
       .eq('id_number', idNumber)
       .single();
 
-    if (error || !rows) {
-      return res.status(401).json({
-        message: 'Invalid ID Number or password'
-      });
+    if (error) {
+      console.error('[POST /login] Supabase error:', error);
+      return res.status(500).json({ message: 'Database error', error: error.message });
+    }
+
+    if (!rows) {
+      console.log('[POST /login] No user found for idNumber:', idNumber);
+      return res.status(401).json({ message: 'Invalid ID Number or password' });
     }
 
     const user = rows;
+    console.log('[POST /login] Found user id:', user.user_id, 'role:', user.role, 'assigned_station_id:', user.assigned_station_id);
+    console.log('[POST /login] Stored password hash:', user.password ? user.password.substring(0, 20) + '...' : 'NULL');
+    console.log('[POST /login] Provided password:', password);
 
     // Compare password
-    const passwordMatch = await bcrypt.compare(password, user.password);
+    let passwordMatch = false;
+    try {
+      passwordMatch = await bcrypt.compare(password, user.password);
+      console.log('[POST /login] bcrypt.compare result:', passwordMatch);
+    } catch (err) {
+      console.error('[POST /login] bcrypt error:', err.message);
+      // Try plain text comparison as fallback for testing
+      if (password === user.password) {
+        console.log('[POST /login] Plain text match succeeded');
+        passwordMatch = true;
+      }
+    }
+
+    console.log('[POST /login] Final password match:', !!passwordMatch);
 
     if (!passwordMatch) {
-      return res.status(401).json({
-        message: 'Invalid ID Number or password'
-      });
+      return res.status(401).json({ message: 'Invalid ID Number or password' });
     }
 
     // Generate JWT token (include role)
@@ -195,44 +215,42 @@ router.post('/signup-station', async (req, res) => {
       });
     }
 
-    const connection = await pool.getConnection();
-
     // Check if user already exists
-    const [existingUser] = await connection.query(
-      'SELECT * FROM users WHERE id_number = ?',
-      [idNumber]
-    );
+    const { data: existingUser, error: existingErr } = await supabase
+      .from('users')
+      .select('user_id')
+      .eq('id_number', idNumber)
+      .limit(1);
 
-    if (existingUser.length > 0) {
-      connection.release();
-      return res.status(400).json({
-        message: 'User with this ID already exists'
-      });
+    if (existingErr) throw existingErr;
+
+    if (existingUser && existingUser.length > 0) {
+      return res.status(400).json({ message: 'User with this ID already exists' });
     }
 
     // Validate: if stationType='Main', check if Main already exists
     if (stationType === 'Main') {
-      const [mainStations] = await connection.query(
-        'SELECT COUNT(*) as count FROM fire_stations WHERE station_type = ?',
-        ['Main']
-      );
-      if (mainStations[0].count > 0) {
-        // If a Main already exists, only allow creation by an authenticated admin
+      const { data: mainStations, count, error: mainErr } = await supabase
+        .from('_fire_stations')
+        .select('station_id', { count: 'exact' })
+        .limit(1);
+
+      if (mainErr) throw mainErr;
+
+      const mainCount = typeof count === 'number' ? count : (mainStations || []).length;
+      if (mainCount > 0) {
         const authHeader = req.headers['authorization'];
         let caller = null;
         if (!authHeader) {
-          connection.release();
           return res.status(403).json({ message: 'Only admin can create additional stations' });
         }
         try {
           const token = authHeader.split(' ')[1];
           caller = jwt.verify(token, JWT_SECRET);
         } catch (err) {
-          connection.release();
           return res.status(403).json({ message: 'Invalid auth token' });
         }
         if (!caller || caller.role !== 'admin') {
-          connection.release();
           return res.status(403).json({ message: 'Only admin can create stations' });
         }
       }
@@ -240,64 +258,73 @@ router.post('/signup-station', async (req, res) => {
       // For non-Main station creation, require authenticated admin
       const authHeader = req.headers['authorization'];
       if (!authHeader) {
-        connection.release();
         return res.status(403).json({ message: 'Only admin can create stations' });
       }
       try {
         const token = authHeader.split(' ')[1];
         const caller = jwt.verify(token, JWT_SECRET);
         if (!caller || caller.role !== 'admin') {
-          connection.release();
           return res.status(403).json({ message: 'Only admin can create stations' });
         }
       } catch (err) {
-        connection.release();
         return res.status(403).json({ message: 'Invalid auth token' });
       }
     }
 
-    // Start transaction
-    await connection.beginTransaction();
+    // Insert station then user; if user insert fails, delete station to rollback
+    const { data: stationResult, error: stationErr } = await supabase
+      .from('_fire_stations')
+      .insert([
+        {
+          station_name: stationName,
+          province: 'Zamboanga',
+          city: 'Zamboanga City',
+          contact_number: contactNumber || null,
+          latitude: lat,
+          longitude: lng
+        }
+      ])
+      .select('station_id')
+      .single();
+
+    if (stationErr) throw stationErr;
+
+    const stationId = stationResult.station_id;
 
     try {
-      // 1. Insert into fire_stations
-      const [stationResult] = await connection.query(
-        'INSERT INTO fire_stations (station_name, province, city, contact_number, latitude, longitude, station_type) VALUES (?, ?, ?, ?, ?, ?, ?)',
-        [stationName, 'Zamboanga', 'Zamboanga City', contactNumber || null, lat, lng, stationType]
-      );
-      const stationId = stationResult.insertId;
-
-      // 2. Hash password
       const hashedPassword = await bcrypt.hash(password, 10);
-
-      // 3. Insert into users
       const fullName = `${firstName} ${lastName}`.trim();
       const placeholderPhone = `signup_${randomUUID().substring(0, 12)}`;
       let role = 'end_user';
-      if (stationType === 'Main') {
-        role = 'admin';
-      } else if (stationType === 'Substation') {
-        role = 'substation_admin';
+      if (stationType === 'Main') role = 'admin';
+      else if (stationType === 'Substation') role = 'substation_admin';
+
+      const { data: userInsert, error: userErr } = await supabase
+        .from('users')
+        .insert([{
+          first_name: firstName,
+          last_name: lastName,
+          id_number: idNumber,
+          rank: rank,
+          full_name: fullName,
+          phone_number: placeholderPhone,
+          password: hashedPassword,
+          role: role,
+          assigned_station_id: stationId
+        }])
+        .select('user_id')
+        .single();
+
+      if (userErr) {
+        // rollback station
+        await supabase.from('_fire_stations').delete().eq('station_id', stationId);
+        throw userErr;
       }
 
-      await connection.query(
-        'INSERT INTO users (first_name, last_name, id_number, rank, full_name, phone_number, password, role, assigned_station_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [firstName, lastName, idNumber, rank, fullName, placeholderPhone, hashedPassword, role, stationId]
-      );
-
-      // Commit transaction
-      await connection.commit();
-      connection.release();
-
-      res.status(201).json({
-        message: 'Fire station registered successfully. Please login.',
-        stationId: stationId,
-        stationType: stationType
-      });
+      res.status(201).json({ message: 'Fire station registered successfully. Please login.', stationId, stationType });
     } catch (txError) {
-      // Rollback on error
-      await connection.rollback();
-      connection.release();
+      // rollback station if not already
+      await supabase.from('_fire_stations').delete().eq('station_id', stationId);
       throw txError;
     }
   } catch (error) {
@@ -348,34 +375,27 @@ router.put('/update-station', authenticateToken, async (req, res) => {
       }
     }
 
-    const connection = await pool.getConnection();
-
     try {
-      // Update fire_stations table
-      const updateQuery = latitude !== undefined && longitude !== undefined 
-        ? 'UPDATE fire_stations SET station_name = ?, latitude = ?, longitude = ?, contact_number = ? WHERE station_id = ?'
-        : 'UPDATE fire_stations SET station_name = ?, contact_number = ? WHERE station_id = ?';
-
-      const updateParams = latitude !== undefined && longitude !== undefined
-        ? [stationName, parseFloat(latitude), parseFloat(longitude), contactNumber || null, assignedStationId]
-        : [stationName, contactNumber || null, assignedStationId];
-
-      const [result] = await connection.query(updateQuery, updateParams);
-
-      connection.release();
-
-      if (result.affectedRows === 0) {
-        return res.status(404).json({
-          message: 'Station not found or no changes made'
-        });
+      const updates = { station_name: stationName, contact_number: contactNumber || null };
+      if (latitude !== undefined && longitude !== undefined) {
+        updates.latitude = parseFloat(latitude);
+        updates.longitude = parseFloat(longitude);
       }
 
-      res.json({
-        message: 'Station information updated successfully',
-        stationId: assignedStationId
-      });
+      const { data: updated, error: updateErr } = await supabase
+        .from('_fire_stations')
+        .update(updates)
+        .eq('station_id', assignedStationId)
+        .select('station_id');
+
+      if (updateErr) throw updateErr;
+
+      if (!updated || updated.length === 0) {
+        return res.status(404).json({ message: 'Station not found or no changes made' });
+      }
+
+      res.json({ message: 'Station information updated successfully', stationId: assignedStationId });
     } catch (error) {
-      connection.release();
       throw error;
     }
   } catch (error) {
@@ -390,7 +410,12 @@ router.put('/update-station', authenticateToken, async (req, res) => {
 // Public: list fire stations (id and name) for assignment dropdown
 router.get('/stations', async (req, res) => {
   try {
-    const [rows] = await pool.query('SELECT station_id, station_name, station_type FROM fire_stations ORDER BY station_name ASC');
+    const { data: rows, error } = await supabase
+      .from('_fire_stations')
+      .select('station_id, station_name')
+      .order('station_name', { ascending: true });
+
+    if (error) throw error;
     res.json({ stations: rows });
   } catch (error) {
     console.error('Get stations error:', error);
@@ -414,21 +439,18 @@ router.post('/verify-password', authenticateToken, async (req, res) => {
       });
     }
 
-    const connection = await pool.getConnection();
-
     // Get user from database using the id from JWT token
-    const [rows] = await connection.query(
-      'SELECT password FROM users WHERE user_id = ?',
-      [userId]
-    );
+    const { data: rows, error: userErr } = await supabase
+      .from('users')
+      .select('password')
+      .eq('user_id', userId)
+      .limit(1);
 
-    connection.release();
+    if (userErr) throw userErr;
 
-    if (rows.length === 0) {
+    if (!rows || rows.length === 0) {
       console.log('[POST /verify-password] User not found with ID:', userId);
-      return res.status(401).json({
-        message: 'User not found'
-      });
+      return res.status(401).json({ message: 'User not found' });
     }
 
     const user = rows[0];

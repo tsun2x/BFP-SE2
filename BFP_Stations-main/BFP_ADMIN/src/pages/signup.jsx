@@ -1,5 +1,5 @@
 import { Link, useNavigate } from "react-router-dom";
-import { useState, useContext } from "react";
+import { useState, useContext, useEffect } from "react";
 import { AuthContext } from "../context/AuthContext";
 import "../style/auth.css";
 
@@ -12,6 +12,7 @@ export default function Signup() {
     idNumber: "",
     rank: "",
     userType: "Main",
+    assignedStationId: "",
     password: "",
     confirmPassword: ""
   });
@@ -70,6 +71,11 @@ export default function Signup() {
       newErrors.confirmPassword = "Passwords do not match";
     }
     
+    // ensure assigned station selected for Main admin
+    if (!formData.assignedStationId) {
+      newErrors.assignedStationId = 'Please select assigned station';
+    }
+    
     return newErrors;
   };
 
@@ -93,6 +99,26 @@ export default function Signup() {
     }
   };
 
+  const fetchStations = async () => {
+    try {
+      const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+      const res = await fetch(`${apiUrl}/stations`);
+      if (res.ok) {
+        const data = await res.json();
+        const list = data.stations || [];
+        setStations(list);
+      } else {
+        console.error('Failed to fetch stations', res.status);
+      }
+    } catch (err) {
+      console.error('Failed to fetch stations', err);
+    }
+  };
+
+  useEffect(() => {
+    fetchStations();
+  }, []);
+
   const getPasswordStrengthLabel = () => {
     const labels = ["Very Weak", "Weak", "Fair", "Good", "Strong"];
     return labels[passwordStrength];
@@ -107,6 +133,7 @@ export default function Signup() {
     e.preventDefault();
     
     const newErrors = validateForm();
+
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
       return;
@@ -116,14 +143,14 @@ export default function Signup() {
     setSignupError("");
     
     try {
-      // Build payload with only basic user data
       const payload = {
         firstName: formData.firstName,
         lastName: formData.lastName,
         idNumber: formData.idNumber,
         rank: formData.rank,
+        assignedStationId: formData.assignedStationId,
         password: formData.password,
-        role: formData.userType === 'Main' ? 'admin' : 'end_user'
+        role: 'admin'
       };
 
       const result = await signup(payload);
@@ -161,25 +188,29 @@ export default function Signup() {
             </div>
           )}
 
+          <form onSubmit={handleSignup}>
+
             <div className="auth-row">
               <div className="auth-group">
-                <label>User Type</label>
-                <select 
-                  name="userType"
-                  value={formData.userType}
+                <label>Assigned Station</label>
+                <select
+                  name="assignedStationId"
+                  value={formData.assignedStationId}
                   onChange={handleInputChange}
-                  className={errors.userType ? "error" : ""}
-                  disabled
+                  className={errors.assignedStationId ? 'error' : ''}
                 >
-                  <option value="Main">Main Station Admin</option>
+                  <option value="">-- Select Station --</option>
+                  {stations.map(s => (
+                    <option key={s.station_id} value={s.station_id}>{s.station_name}</option>
+                  ))}
                 </select>
-                {errors.userType && (
-                  <span className="error-message">{errors.userType}</span>
+                {errors.assignedStationId && (
+                  <span className="error-message">{errors.assignedStationId}</span>
                 )}
               </div>
             </div>
 
-          <form onSubmit={handleSignup}>
+            <h2 className="section-title">Personal Information</h2>
 
             <div className="auth-row">
               <div className="auth-group">
@@ -307,6 +338,7 @@ export default function Signup() {
                   idNumber: "",
                   rank: "",
                   userType: "Main",
+                  assignedStationId: "",
                   password: "",
                   confirmPassword: ""
                 });

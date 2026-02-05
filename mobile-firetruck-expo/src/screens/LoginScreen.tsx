@@ -13,14 +13,14 @@ import { useAuth } from '../context/AuthContext';
 const LoginScreen: React.FC = () => {
   const { login, isLoading } = useAuth();
   const [idNumber, setIdNumber] = useState('');
-  const [name, setName] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
 
   const handleLogin = async () => {
     setError(null);
 
     try {
-      await login(idNumber.trim(), name.trim());
+      await login(idNumber.trim(), password);
       // On success, AuthContext will set user and the app will switch to the main tabs.
     } catch (e: any) {
       setError(e?.message || 'Login failed.');
@@ -31,11 +31,11 @@ const LoginScreen: React.FC = () => {
     <View style={styles.container}>
       <Text style={styles.title}>BFP Firetruck Login</Text>
       <Text style={styles.subtitle}>
-        Sign in with your BFP badge number and name to start broadcasting.
+        Sign in with your BFP badge ID and password to start tracking.
       </Text>
 
       <View style={styles.form}>
-        <Text style={styles.label}>BFP Badge Number</Text>
+        <Text style={styles.label}>BFP Badge ID</Text>
         <TextInput
           style={styles.input}
           placeholder="e.g. BFP-00002"
@@ -44,13 +44,13 @@ const LoginScreen: React.FC = () => {
           onChangeText={setIdNumber}
         />
 
-        <Text style={styles.label}>Officer Name</Text>
+        <Text style={styles.label}>Password</Text>
         <TextInput
           style={styles.input}
-          placeholder="e.g. Juan Dela Cruz"
-          autoCapitalize="words"
-          value={name}
-          onChangeText={setName}
+          placeholder="Enter your password"
+          secureTextEntry
+          value={password}
+          onChangeText={setPassword}
         />
 
         {error ? <Text style={styles.error}>{error}</Text> : null}

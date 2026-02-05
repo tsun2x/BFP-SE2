@@ -1,5 +1,5 @@
 import express from 'express';
-import { pool } from '../config/database.js';
+import { supabase } from '../supabaseClient.js';
 import { authenticateToken } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -11,6 +11,8 @@ router.post('/station-readiness', authenticateToken, async (req, res) => {
     const userId = req.user.id;
     const assignedStationId = req.user.assignedStationId;
 
+    console.log('[POST /station-readiness] User:', userId, 'Station:', assignedStationId, 'Status:', status);
+
     // Validate required fields
     if (!status || readinessPercentage === undefined) {
       return res.status(400).json({
@@ -20,46 +22,62 @@ router.post('/station-readiness', authenticateToken, async (req, res) => {
 
     // Validate user is assigned to a station
     if (!assignedStationId) {
+      console.log('[POST /station-readiness] User not assigned to any station');
       return res.status(403).json({
         message: 'You are not assigned to any station'
       });
     }
 
-    const connection = await pool.getConnection();
-
     try {
-      // Insert readiness record
-      const [result] = await connection.query(
-        `INSERT INTO station_readiness (station_id, submitted_by_user_id, status, readiness_percentage, equipment_checklist)
-         VALUES (?, ?, ?, ?, ?)`,
-        [assignedStationId, userId, status, readinessPercentage, JSON.stringify(equipmentChecklist || {})]
-      );
+      console.log('[POST /station-readiness] Inserting readiness record...');
+      const { data: result, error: insertErr } = await supabase
+        .from('_station_readiness')
+        .insert([
+          {
+            station_id: assignedStationId,
+            submitted_by_user_id: null,
+            status,
+            readiness_percentage: readinessPercentage,
+            equipment_checklist: JSON.stringify(equipmentChecklist || {})
+          }
+        ])
+        .select('readiness_id')
+        .single();
 
-      // Update fire_stations is_ready flag and last_status_update
+      if (insertErr) {
+        console.error('[POST /station-readiness] Insert error:', insertErr);
+        throw insertErr;
+      }
+
+      console.log('[POST /station-readiness] Insert success, updating station...');
       const isReady = status === 'READY' ? 1 : 0;
-      await connection.query(
-        `UPDATE fire_stations SET is_ready = ?, last_status_update = NOW() WHERE station_id = ?`,
-        [isReady, assignedStationId]
-      );
+      const { error: updateErr } = await supabase
+        .from('_fire_stations')
+        .update({ is_ready: isReady, last_status_update: new Date().toISOString() })
+        .eq('station_id', assignedStationId);
 
-      connection.release();
+      if (updateErr) {
+        console.error('[POST /station-readiness] Update error:', updateErr);
+        throw updateErr;
+      }
 
+      console.log('[POST /station-readiness] Success');
       res.status(201).json({
         message: 'Station readiness submitted successfully',
-        readinessId: result.insertId,
+        readinessId: result?.readiness_id || null,
         stationId: assignedStationId,
         status,
         readinessPercentage
       });
     } catch (error) {
-      connection.release();
       throw error;
     }
   } catch (error) {
-    console.error('Submit station readiness error:', error);
+    console.error('[POST /station-readiness] Error:', error);
     res.status(500).json({
       message: 'Failed to submit station readiness',
-      error: error.message
+      error: error.message,
+      details: error.details || error
     });
   }
 });
@@ -69,38 +87,28 @@ router.get('/station-readiness/:stationId', authenticateToken, async (req, res) 
   try {
     const { stationId } = req.params;
 
-    const connection = await pool.getConnection();
+    const { data: readiness, error: readinessErr } = await supabase
+      .from('_station_readiness')
+      .select('*, _fire_stations(station_name)')
+      .eq('station_id', stationId)
+      .order('submitted_at', { ascending: false })
+      .limit(1);
 
-    const [readiness] = await connection.query(
-      `SELECT r.*, u.first_name, u.last_name, fs.station_name
-       FROM station_readiness r
-       JOIN users u ON r.submitted_by_user_id = u.user_id
-       JOIN fire_stations fs ON r.station_id = fs.station_id
-       WHERE r.station_id = ?
-       ORDER BY r.submitted_at DESC
-       LIMIT 1`,
-      [stationId]
-    );
+    if (readinessErr) throw readinessErr;
 
-    connection.release();
-
-    if (readiness.length === 0) {
-      return res.status(404).json({
-        message: 'No readiness record found for this station'
-      });
+    if (!readiness || readiness.length === 0) {
+      return res.status(404).json({ message: 'No readiness record found for this station' });
     }
 
     const record = readiness[0];
     res.json({
       readinessId: record.readiness_id,
       stationId: record.station_id,
-      stationName: record.station_name,
+      stationName: record._fire_stations?.[0]?.station_name || null,
       status: record.status,
       readinessPercentage: record.readiness_percentage,
-      equipmentChecklist: typeof record.equipment_checklist === 'string' 
-        ? JSON.parse(record.equipment_checklist) 
-        : record.equipment_checklist,
-      submittedBy: `${record.first_name} ${record.last_name}`,
+      equipmentChecklist: typeof record.equipment_checklist === 'string' ? JSON.parse(record.equipment_checklist) : record.equipment_checklist,
+      submittedBy: 'N/A',
       submittedAt: record.submitted_at
     });
   } catch (error) {
@@ -115,50 +123,53 @@ router.get('/station-readiness/:stationId', authenticateToken, async (req, res) 
 // Get all stations with their latest readiness (for overview)
 router.get('/stations-readiness-overview', authenticateToken, async (req, res) => {
   try {
-    const connection = await pool.getConnection();
+    console.log('[GET /stations-readiness-overview] Starting...');
+    
+    // Fetch stations, then latest readiness per station
+    const { data: stations, error: stationsErr } = await supabase
+      .from('_fire_stations')
+      .select('station_id, station_name, is_ready, last_status_update')
+      .order('station_name', { ascending: true });
 
-    const [results] = await connection.query(
-      `SELECT 
-        fs.station_id,
-        fs.station_name,
-        fs.station_type,
-        fs.is_ready,
-        fs.last_status_update,
-        COALESCE(r.status, 'UNKNOWN') as readiness_status,
-        COALESCE(r.readiness_percentage, 0) as readiness_percentage,
-        COALESCE(u.first_name, 'N/A') as last_submitted_by_first_name,
-        COALESCE(u.last_name, 'N/A') as last_submitted_by_last_name,
-        r.submitted_at as last_readiness_update
-       FROM fire_stations fs
-       LEFT JOIN (
-         SELECT * FROM station_readiness
-         WHERE (station_id, submitted_at) IN (
-           SELECT station_id, MAX(submitted_at) 
-           FROM station_readiness 
-           GROUP BY station_id
-         )
-       ) r ON fs.station_id = r.station_id
-       LEFT JOIN users u ON r.submitted_by_user_id = u.user_id
-       ORDER BY fs.station_type DESC, fs.station_name ASC`
-    );
+    if (stationsErr) {
+      console.error('[GET /stations-readiness-overview] Stations error:', stationsErr);
+      throw stationsErr;
+    }
 
-    connection.release();
+    console.log('[GET /stations-readiness-overview] Found stations:', stations?.length || 0);
 
-    const overview = results.map(row => ({
-      stationId: row.station_id,
-      stationName: row.station_name,
-      stationType: row.station_type,
-      isReady: row.is_ready === 1,
-      readinessStatus: row.readiness_status,
-      readinessPercentage: row.readiness_percentage,
-      lastSubmittedBy: `${row.last_submitted_by_first_name} ${row.last_submitted_by_last_name}`,
-      lastReadinessUpdate: row.last_readiness_update,
-      lastStatusUpdate: row.last_status_update
-    }));
+    const overview = [];
 
+    for (const s of stations || []) {
+      const { data: latest, error: latestErr } = await supabase
+        .from('_station_readiness')
+        .select('*')
+        .eq('station_id', s.station_id)
+        .order('submitted_at', { ascending: false })
+        .limit(1);
+
+      if (latestErr) {
+        console.error(`[GET /stations-readiness-overview] Readiness error for station ${s.station_id}:`, latestErr);
+      }
+
+      const rec = (latest && latest[0]) || null;
+
+      overview.push({
+        stationId: s.station_id,
+        stationName: s.station_name,
+        isReady: s.is_ready === 1,
+        readinessStatus: rec ? rec.status : 'UNKNOWN',
+        readinessPercentage: rec ? rec.readiness_percentage : 0,
+        lastSubmittedBy: 'N/A',
+        lastReadinessUpdate: rec ? rec.submitted_at : null,
+        lastStatusUpdate: s.last_status_update
+      });
+    }
+
+    console.log('[GET /stations-readiness-overview] Success, returning', overview.length, 'stations');
     res.json({ overview });
   } catch (error) {
-    console.error('Get stations readiness overview error:', error);
+    console.error('[GET /stations-readiness-overview] Fatal error:', error);
     res.status(500).json({
       message: 'Failed to fetch readiness overview',
       error: error.message

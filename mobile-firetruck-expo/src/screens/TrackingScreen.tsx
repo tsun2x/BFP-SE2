@@ -3,7 +3,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Platform, Alert } from 'react-native';
 import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
-import { useAuth } from '../context/AuthContext';
 
 // Backend base URL – update this to your actual XAMPP URL
 const API_URL = 'http://10.80.242.64/SE_BFP';
@@ -16,15 +15,7 @@ const TrackingScreen = () => {
   const [location, setLocation] = useState<Location.LocationObject | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [truckId, setTruckId] = useState<number>(1); // or whatever real truck_id you saw
-  const [alarmLevel, setAlarmLevel] = useState<string>('1st Alarm');
   const locationSubscription = useRef<Location.LocationSubscription | null>(null);
-  const { user } = useAuth();
-  const ALARM_LEVELS = ['1st Alarm', '2nd Alarm', '3rd Alarm', 'General Alarm'];
-  const [fireStatus, setFireStatus] = useState<'ongoing' | 'out'>('ongoing');
-  const FIRE_STATUS_OPTIONS: { key: 'ongoing' | 'out'; label: string }[] = [
-    { key: 'ongoing', label: 'Being Dealt With' },
-    { key: 'out', label: 'Fire Out' },
-  ];
 
   // Request location permissions
   const requestPermissions = async () => {
@@ -36,12 +27,12 @@ const TrackingScreen = () => {
     return true;
   };
 
-  // Send location to server (Node backend -> Supabase)
+  // Send location to server
   const sendLocationToServer = async (location: Location.LocationObject) => {
     try {
       console.log('Sending location for truck_id =', truckId);
-
-      const response = await fetch(`${NODE_API_URL}/firetrucks/track`, {
+      
+      const response = await fetch(`${API_URL}/api/update_firetruck_location.php`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -54,9 +45,7 @@ const TrackingScreen = () => {
           heading: location.coords.heading,
           accuracy: location.coords.accuracy,
           battery_level: 100, // You can get this from battery API if needed
-          alarm_id: null, // Optional: Add if you have alarm system
-          alarm_level: alarmLevel,
-          fire_status: fireStatus,
+          alarm_id: null // Optional: Add if you have alarm system
         }),
       });
 
@@ -179,72 +168,10 @@ const TrackingScreen = () => {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Firetruck Tracking</Text>
-
-      {user && (
-        <View style={styles.officerInfo}>
-          <Text style={styles.officerText}>Officer: {user.name}</Text>
-          <Text style={styles.officerText}>Badge: {user.idNumber}</Text>
-        </View>
-      )}
-
+      
       <View style={styles.infoContainer}>
         <Text style={styles.label}>Status: {isTracking ? 'Active' : 'Inactive'}</Text>
-
-        <Text style={styles.label}>
-          Alarm Level: <Text style={styles.alarmValue}>{alarmLevel}</Text>
-        </Text>
-
-        <View style={styles.alarmButtonsRow}>
-          {ALARM_LEVELS.map((level) => (
-            <TouchableOpacity
-              key={level}
-              style={[
-                styles.alarmButton,
-                alarmLevel === level && styles.alarmButtonActive,
-              ]}
-              onPress={() => setAlarmLevel(level)}
-            >
-              <Text
-                style={[
-                  styles.alarmButtonText,
-                  alarmLevel === level && styles.alarmButtonTextActive,
-                ]}
-              >
-                {level}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        <Text style={styles.label}>
-          Fire Status:{' '}
-          <Text style={styles.alarmValue}>
-            {fireStatus === 'ongoing' ? 'Being Dealt With' : 'Fire Out'}
-          </Text>
-        </Text>
-
-        <View style={styles.statusButtonsRow}>
-          {FIRE_STATUS_OPTIONS.map((option) => (
-            <TouchableOpacity
-              key={option.key}
-              style={[
-                styles.statusButton,
-                fireStatus === option.key && styles.statusButtonActive,
-              ]}
-              onPress={() => setFireStatus(option.key)}
-            >
-              <Text
-                style={[
-                  styles.statusButtonText,
-                  fireStatus === option.key && styles.statusButtonTextActive,
-                ]}
-              >
-                {option.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
+        
         {location ? (
           <View style={styles.coordinates}>
             <Text>Latitude: {location.coords.latitude.toFixed(6)}</Text>
@@ -348,68 +275,6 @@ const styles = StyleSheet.create({
   },
   buttonIcon: {
     marginRight: 5,
-  },
-  officerInfo: {
-    marginBottom: 8,
-    paddingHorizontal: 4,
-  },
-  officerText: {
-    fontSize: 14,
-    color: '#333',
-  },
-  alarmValue: {
-    fontWeight: '600',
-    color: '#B71C1C',
-  },
-  alarmButtonsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginTop: 8,
-  },
-  alarmButton: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#B71C1C',
-    marginRight: 8,
-    marginBottom: 8,
-  },
-  alarmButtonActive: {
-    backgroundColor: '#B71C1C',
-  },
-  alarmButtonText: {
-    fontSize: 12,
-    color: '#B71C1C',
-  },
-  alarmButtonTextActive: {
-    color: '#fff',
-    fontWeight: '600',
-  },
-  statusButtonsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginTop: 8,
-  },
-  statusButton: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#B71C1C',
-    marginRight: 8,
-    marginBottom: 8,
-  },
-  statusButtonActive: {
-    backgroundColor: '#B71C1C',
-  },
-  statusButtonText: {
-    fontSize: 12,
-    color: '#B71C1C',
-  },
-  statusButtonTextActive: {
-    color: '#fff',
-    fontWeight: '600',
   },
 });
 

@@ -24,7 +24,7 @@ export default function Sidebar() {
         </NavLink>
 
         <NavLink to="/reports" className="nav-item">
-          <i class="fa-solid fa-inbox"></i> Reports
+          <i className="fa-solid fa-inbox"></i> Reports
         </NavLink>
 
         <hr />

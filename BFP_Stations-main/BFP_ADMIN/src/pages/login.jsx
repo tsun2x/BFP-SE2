@@ -63,6 +63,15 @@ export default function Login() {
       const result = await login(formData.idNumber, formData.password);
       
       if (result.success) {
+        // Check if user is an admin
+        const user = JSON.parse(localStorage.getItem("user"));
+        if (user && user.role !== 'admin') {
+          // Not an admin - clear login and show error
+          localStorage.removeItem("authToken");
+          localStorage.removeItem("user");
+          setLoginError("Only admin users can access this portal. Please use the substation portal.");
+          return;
+        }
         navigate("/");
       } else {
         setLoginError(result.error || "Login failed. Please try again.");

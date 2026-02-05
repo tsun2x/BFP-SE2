@@ -94,10 +94,17 @@ export default function Signup() {
   const fetchStations = async () => {
     try {
       const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+      console.log('Fetching stations from:', `${apiUrl}/stations`);
       const res = await fetch(`${apiUrl}/stations`);
+      console.log('Response status:', res.status);
       if (res.ok) {
         const data = await res.json();
+        console.log('Stations fetched:', data);
         setStations(data.stations || []);
+      } else {
+        console.error('Failed to fetch stations:', res.status, res.statusText);
+        const errorData = await res.json();
+        console.error('Error response:', errorData);
       }
     } catch (err) {
       console.error('Failed to fetch stations', err);

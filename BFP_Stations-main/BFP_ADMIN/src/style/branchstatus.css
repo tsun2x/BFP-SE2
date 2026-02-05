@@ -1,0 +1,100 @@
+.status-page {
+  width: 100%;
+  padding: 20px 30px;
+  box-sizing: border-box;
+}
+
+/* Page Title (inherits general style) */
+.page-title {
+  margin-bottom: 25px;
+}
+
+/* Grid container */
+.stations-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 25px;
+  margin-top: 15px;
+}
+
+/* Individual station card */
+.station-card {
+  background: #ffffff;
+  padding: 25px;
+  border-radius: 14px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  transition: 0.2s ease;
+  border-left: 6px solid transparent;
+}
+
+/* Hover effect */
+.station-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+}
+
+/* Card header */
+.station-header h2 {
+  font-size: 20px;
+  font-weight: 600;
+  color: #222;
+  margin-bottom: 18px;
+}
+
+/* Status row */
+.station-status {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Status icon styling */
+.status-icon {
+  font-size: 26px;
+  width: 28px;
+  text-align: center;
+}
+
+/* Status text styling */
+.status-text {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+/* Status Colors */
+.status-ready {
+  color: #1db954; /* green */
+}
+
+.status-notready {
+  color: #e63946; /* red */
+}
+
+.status-dispatch {
+  color: #f1c40f; /* yellow */
+}
+
+.status-maintenance {
+  color: #e67e22; /* orange */
+}
+
+/* Left border indicator based on status */
+.station-card .status-ready ~ .station-card {
+  border-left-color: #1db954;
+}
+
+.station-card.ready {
+  border-left: 6px solid #1db954;
+}
+
+.station-card.notready {
+  border-left: 6px solid #e63946;
+}
+
+.station-card.dispatch {
+  border-left: 6px solid #f1c40f;
+}
+
+.station-card.maintenance {
+  border-left: 6px solid #e67e22;
+}

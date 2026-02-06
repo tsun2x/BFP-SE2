@@ -1,4 +1,4 @@
 // Update this URL to match your Node.js backend server
-// For development: http://localhost:5000
-// For mobile phones: http://your-pc-ip:5000
-export const API_URL = 'http://10.80.242.64:5000'; // Replace with your actual server IP
+// For development on a physical device, this must be your PC's LAN IP, not localhost
+// Example: if Expo shows exp://192.168.1.60:8081, then use http://192.168.1.60:5000
+export const API_URL = 'http://192.168.1.60:5000';

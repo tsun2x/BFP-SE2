@@ -48,7 +48,7 @@ export const ProfileScreen: React.FC = () => {
         </View>
       ) : (
         <Text style={styles.subtitle}>
-          Not signed in. Please log in as a BFP officer to see your profile.
+          Not signed in. Please do log in as a BFP officer to see your profile.
         </Text>
       )}
     </View>

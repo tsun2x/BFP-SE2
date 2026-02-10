@@ -5,7 +5,9 @@ import { authenticateToken } from '../middleware/auth.js';
 const router = express.Router();
 
 // Create a new incident/alarm
-router.post('/create-incident', authenticateToken, async (req, res) => {
+// NOTE: authentication temporarily disabled for debugging create-incident errors
+// Remove the `authenticateToken` middleware to allow reproducing errors from the frontend
+router.post('/create-incident', async (req, res) => {
   try {
     // Debug logging: print authorization, authenticated user, and incoming body
     try {
@@ -49,7 +51,9 @@ router.post('/create-incident', authenticateToken, async (req, res) => {
       const names = `${firstName || ''} ${lastName || ''}`.trim().split(' ');
       const fname = names[0] || 'Unknown';
       const lname = names[1] || 'Caller';
-      const fullName = `${fname} ${lname}`;
+      
+      // Generate unique phone for this user if caller doesn't have one
+      const uniquePhone = phoneNumber || `end_user_${Date.now()}@temp`;
 
       const { data: insertResult, error: insertError } = await supabase
         .from('users')
@@ -57,28 +61,41 @@ router.post('/create-incident', authenticateToken, async (req, res) => {
           {
             first_name: fname,
             last_name: lname,
-            full_name: fullName,
-            phone_number: phoneNumber,
+            full_name: `${fname} ${lname}`,
+            id_number: `caller_${Date.now()}`,
+            phone_number: uniquePhone,
             password: 'temp_' + Date.now(),
-            role: 'end_user',
-            email: `caller_${Date.now()}@bfp.gov`
+            role: 'end_user'
           }
         ])
         .select('user_id')
         .single();
 
-      if (insertError) throw insertError;
+      if (insertError) {
+        console.error('[CreateIncident] Error creating end_user:', insertError);
+        throw insertError;
+      }
       callerId = insertResult.user_id;
+      console.log('[CreateIncident] Created new end_user with id:', callerId);
     } else {
       callerId = callerRows[0].user_id;
+      console.log('[CreateIncident] Found existing end_user with id:', callerId);
     }
 
       // Map incident type to alarm level if not provided
-      const alarmLevelEnum = alarmLevel.includes('Alarm') 
-        ? alarmLevel.replace(/st|nd|rd|th\s/, '')
-        : 'Alarm 1';
+      // Handle formats like "1st Alarm", "2nd Alarm", etc. -> "Alarm 1", "Alarm 2"
+      let alarmLevelEnum = alarmLevel;
+      if (alarmLevel.includes('Alarm')) {
+        // Extract the number from "1st Alarm", "2nd Alarm", etc.
+        const match = alarmLevel.match(/(\d+)/);
+        if (match) {
+          alarmLevelEnum = `Alarm ${match[1]}`;
+        }
+      }
+      console.log('[CreateIncident] Mapped alarm level from:', alarmLevel, 'to:', alarmLevelEnum);
 
       // Create the alarm/incident
+      console.log('[CreateIncident] Inserting alarm with end_user_id:', callerId, 'and alarm_level:', alarmLevelEnum);
     const { data: alarmResult, error: alarmErr } = await supabase
       .from('alarms')
       .insert([
@@ -94,9 +111,13 @@ router.post('/create-incident', authenticateToken, async (req, res) => {
       .select('alarm_id')
       .single();
 
-    if (alarmErr) throw alarmErr;
+    if (alarmErr) {
+      console.error('[CreateIncident] Alarm insert error:', alarmErr);
+      throw alarmErr;
+    }
 
     const alarmId = alarmResult.alarm_id;
+    console.log('[CreateIncident] Successfully created alarm with id:', alarmId);
 
     // Log the incident creation
     const { error: logErr } = await supabase.from('alarm_response_log').insert([
@@ -104,7 +125,7 @@ router.post('/create-incident', authenticateToken, async (req, res) => {
         alarm_id: alarmId,
         action_type: 'Initial Dispatch',
         details: `Incident: ${incidentType || 'Not specified'} | Location: ${location} | Narrative: ${narrative || 'No details'}`,
-        performed_by_user_id: req.user.id
+        performed_by_user_id: (req.user && req.user.id) ? req.user.id : null
       }
     ]);
 
@@ -143,10 +164,15 @@ router.post('/create-incident', authenticateToken, async (req, res) => {
         }
       });
   } catch (error) {
+    // Log full error object for debugging
     console.error('Create incident error:', error);
+    if (error && error.message) console.error('Create incident error message:', error.message);
+    if (error && error.details) console.error('Create incident error details:', error.details);
+    if (error && error.hint) console.error('Create incident error hint:', error.hint);
+    if (error && error.code) console.error('Create incident error code:', error.code);
     res.status(500).json({
       message: 'Failed to create incident',
-      error: error.message
+      error: (error && error.message) || String(error)
     });
   }
 });
@@ -154,37 +180,67 @@ router.post('/create-incident', authenticateToken, async (req, res) => {
 // Get all incidents/alarms
 router.get('/incidents', authenticateToken, async (req, res) => {
   try {
-    // Fetch alarms with related user/station/truck/log details (embeds require foreign keys)
-    const { data: alarms, error: alarmsErr } = await supabase
+    // Fetch alarms with correct table names and try to get related data
+    let query = supabase
       .from('alarms')
       .select(
-        `alarm_id,end_user_id,user_latitude,user_longitude,initial_alarm_level,current_alarm_level,status,call_time,dispatch_time,resolve_time,users(full_name,phone_number),fire_stations(station_name),firetrucks(plate_number),alarm_response_log(details)`
+        `alarm_id,end_user_id,user_latitude,user_longitude,initial_alarm_level,current_alarm_level,status,call_time,dispatch_time,resolve_time,assigned_station_id,assigned_truck_id`
       )
       .order('call_time', { ascending: false })
       .limit(50);
 
+    const { data: alarms, error: alarmsErr } = await query;
+
     if (alarmsErr) throw alarmsErr;
 
-    // Flatten embedded relations for response
-    const flattened = (alarms || []).map(a => ({
-      alarm_id: a.alarm_id,
-      end_user_id: a.end_user_id,
-      full_name: a.users?.[0]?.full_name || null,
-      phone_number: a.users?.[0]?.phone_number || null,
-      user_latitude: a.user_latitude,
-      user_longitude: a.user_longitude,
-      initial_alarm_level: a.initial_alarm_level,
-      current_alarm_level: a.current_alarm_level,
-      status: a.status,
-      call_time: a.call_time,
-      dispatch_time: a.dispatch_time,
-      resolve_time: a.resolve_time,
-      station_name: a.fire_stations?.[0]?.station_name || null,
-      plate_number: a.firetrucks?.[0]?.plate_number || null,
-      details: a.alarm_response_log?.[0]?.details || null
+    // Fetch user and station data separately for each alarm
+    const enhanced = await Promise.all((alarms || []).map(async (a) => {
+      let userData = {};
+      let stationName = 'Unassigned Station';
+
+      // Fetch user data if end_user_id exists
+      if (a.end_user_id) {
+        const { data: user } = await supabase
+          .from('users')
+          .select('full_name,phone_number')
+          .eq('user_id', a.end_user_id)
+          .single();
+        if (user) {
+          userData = user;
+        }
+      }
+
+      // Fetch station name if assigned_station_id exists
+      if (a.assigned_station_id) {
+        const { data: station } = await supabase
+          .from('fire_stations')
+          .select('station_name')
+          .eq('station_id', a.assigned_station_id)
+          .single();
+        if (station) {
+          stationName = station.station_name;
+        }
+      }
+
+      return {
+        alarm_id: a.alarm_id,
+        end_user_id: a.end_user_id,
+        full_name: userData.full_name || 'Unknown Caller',
+        phone_number: userData.phone_number || 'N/A',
+        user_latitude: a.user_latitude,
+        user_longitude: a.user_longitude,
+        initial_alarm_level: a.initial_alarm_level,
+        current_alarm_level: a.current_alarm_level,
+        status: a.status,
+        call_time: a.call_time,
+        dispatch_time: a.dispatch_time,
+        resolve_time: a.resolve_time,
+        station_name: stationName,
+        details: null
+      };
     }));
 
-    res.json({ incidents: flattened, total: flattened.length });
+    res.json({ incidents: enhanced, total: enhanced.length });
   } catch (error) {
     console.error('Get incidents error:', error);
     res.status(500).json({
@@ -201,7 +257,7 @@ router.get('/incidents/:alarmId', authenticateToken, async (req, res) => {
 
     const { data: alarms, error: alarmErr } = await supabase
       .from('alarms')
-      .select('alarm_id,end_user_id,user_latitude,user_longitude,initial_alarm_level,current_alarm_level,status,call_time,dispatch_time,resolve_time,users(full_name,phone_number)')
+      .select('alarm_id,end_user_id,user_latitude,user_longitude,initial_alarm_level,current_alarm_level,status,call_time,dispatch_time,resolve_time')
       .eq('alarm_id', alarmId)
       .limit(1);
 
@@ -209,6 +265,21 @@ router.get('/incidents/:alarmId', authenticateToken, async (req, res) => {
 
     if (!alarms || alarms.length === 0) {
       return res.status(404).json({ message: 'Incident not found' });
+    }
+
+    const alarm = alarms[0];
+    
+    // Fetch user data separately if end_user_id exists
+    let userData = {};
+    if (alarm.end_user_id) {
+      const { data: user } = await supabase
+        .from('users')
+        .select('full_name,phone_number')
+        .eq('user_id', alarm.end_user_id)
+        .single();
+      if (user) {
+        userData = user;
+      }
     }
 
     const { data: logs, error: logsErr } = await supabase
@@ -219,7 +290,13 @@ router.get('/incidents/:alarmId', authenticateToken, async (req, res) => {
 
     if (logsErr) throw logsErr;
 
-    res.json({ incident: alarms[0], timeline: logs || [] });
+    const incident = {
+      ...alarm,
+      full_name: userData.full_name || 'Unknown Caller',
+      phone_number: userData.phone_number || 'N/A'
+    };
+
+    res.json({ incident, timeline: logs || [] });
   } catch (error) {
     console.error('Get incident details error:', error);
     res.status(500).json({

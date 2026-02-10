@@ -82,7 +82,7 @@ router.post('/login', async (req, res) => {
     let stationInfo = null;
     if (user.assigned_station_id) {
       const { data: stations } = await supabase
-        .from('_fire_stations')
+        .from('fire_stations')
         .select('*')
         .eq('station_id', user.assigned_station_id)
         .single();
@@ -231,7 +231,7 @@ router.post('/signup-station', async (req, res) => {
     // Validate: if stationType='Main', check if Main already exists
     if (stationType === 'Main') {
       const { data: mainStations, count, error: mainErr } = await supabase
-        .from('_fire_stations')
+        .from('fire_stations')
         .select('station_id', { count: 'exact' })
         .limit(1);
 
@@ -273,7 +273,7 @@ router.post('/signup-station', async (req, res) => {
 
     // Insert station then user; if user insert fails, delete station to rollback
     const { data: stationResult, error: stationErr } = await supabase
-      .from('_fire_stations')
+      .from('fire_stations')
       .insert([
         {
           station_name: stationName,
@@ -317,14 +317,14 @@ router.post('/signup-station', async (req, res) => {
 
       if (userErr) {
         // rollback station
-        await supabase.from('_fire_stations').delete().eq('station_id', stationId);
+        await supabase.from('fire_stations').delete().eq('station_id', stationId);
         throw userErr;
       }
 
       res.status(201).json({ message: 'Fire station registered successfully. Please login.', stationId, stationType });
     } catch (txError) {
       // rollback station if not already
-      await supabase.from('_fire_stations').delete().eq('station_id', stationId);
+      await supabase.from('fire_stations').delete().eq('station_id', stationId);
       throw txError;
     }
   } catch (error) {
@@ -383,7 +383,7 @@ router.put('/update-station', authenticateToken, async (req, res) => {
       }
 
       const { data: updated, error: updateErr } = await supabase
-        .from('_fire_stations')
+        .from('fire_stations')
         .update(updates)
         .eq('station_id', assignedStationId)
         .select('station_id');
@@ -411,7 +411,7 @@ router.put('/update-station', authenticateToken, async (req, res) => {
 router.get('/stations', async (req, res) => {
   try {
     const { data: rows, error } = await supabase
-      .from('_fire_stations')
+      .from('fire_stations')
       .select('station_id, station_name')
       .order('station_name', { ascending: true });
 
@@ -476,6 +476,49 @@ router.post('/verify-password', authenticateToken, async (req, res) => {
       message: 'Password verification failed',
       error: error.message
     });
+  }
+});
+
+// GET /api/officers - list officers for the caller's station or specified station
+router.get('/officers', authenticateToken, async (req, res) => {
+  try {
+    // Allow optional station_id query param, otherwise use caller's assignedStationId
+    const stationId = req.query.station_id || req.user.assignedStationId || null;
+
+    // If no stationId and caller is not admin, deny
+    if (!stationId && req.user.role !== 'admin') {
+      return res.status(400).json({ success: false, message: 'station_id required for non-admin users' });
+    }
+
+    // Build query: select users assigned to the station and who are officers (exclude admins)
+    let query = supabase.from('users').select('user_id,first_name,last_name,full_name,rank,assigned_station_id,role,phone_number');
+
+    if (stationId) query = query.eq('assigned_station_id', stationId);
+
+    // Exclude admin accounts
+    query = query.not('role', 'eq', 'admin');
+
+    const { data: users, error } = await query.order('full_name', { ascending: true });
+
+    if (error) throw error;
+
+    // Map to include placeholder login/logout/status fields if not present in DB
+    const mapped = (users || []).map(u => ({
+      id: u.user_id,
+      name: u.full_name || `${u.first_name} ${u.last_name}`.trim(),
+      rank: u.rank || '',
+      phone: u.phone_number || '',
+      assigned_station_id: u.assigned_station_id || null,
+      role: u.role || 'officer',
+      last_login: null,
+      last_logout: null,
+      status: 'Offline'
+    }));
+
+    res.json({ success: true, data: mapped });
+  } catch (error) {
+    console.error('GET /officers error:', error);
+    res.status(500).json({ success: false, message: 'Failed to get officers', error: error.message });
   }
 });
 

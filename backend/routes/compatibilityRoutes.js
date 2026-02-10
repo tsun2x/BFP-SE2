@@ -137,7 +137,7 @@ router.post('/update_firetruck_location.php', async (req, res) => {
 
     try {
       const { error: updateErr } = await supabase
-        .from('firetrucks')
+        .from('_firetrucks')
         .update({
           current_latitude: latitude,
           current_longitude: longitude,
@@ -172,7 +172,7 @@ router.get('/get_firetruck_locations.php', async (req, res) => {
 
     // Build Supabase query with filters
     try {
-      let query = supabase.from('firetrucks').select('truck_id,plate_number,model,current_latitude,current_longitude,last_location_update,last_online,battery_level,status,current_alarm_id,station_id,fire_stations(station_name,contact_number),alarms(status,user_latitude,user_longitude,initial_alarm_level,current_alarm_level),users(full_name,phone_number)');
+      let query = supabase.from('_firetrucks').select('truck_id,plate_number,model,current_latitude,current_longitude,last_location_update,last_online,battery_level,status,current_alarm_id,station_id');
 
       if (truck_id) query = query.eq('truck_id', truck_id);
       if (station_id) query = query.eq('station_id', station_id);
@@ -192,13 +192,47 @@ router.get('/get_firetruck_locations.php', async (req, res) => {
 
       if (trucksErr) throw trucksErr;
 
+      // Enhance trucks with station and alarm data
+      const enhanced = await Promise.all((trucks || []).map(async (truck) => {
+        let stationName = 'Unknown Station';
+        let alarmData = null;
+
+        // Fetch station name if station_id exists
+        if (truck.station_id) {
+          const { data: station } = await supabase
+            .from('fire_stations')
+            .select('station_name,contact_number')
+            .eq('station_id', truck.station_id)
+            .single();
+          if (station) {
+            stationName = station.station_name;
+          }
+        }
+
+        // Fetch current alarm if current_alarm_id exists
+        if (truck.current_alarm_id) {
+          const { data: alarm } = await supabase
+            .from('_alarms')
+            .select('status,user_latitude,user_longitude,initial_alarm_level,current_alarm_level')
+            .eq('alarm_id', truck.current_alarm_id)
+            .single();
+          if (alarm) {
+            alarmData = alarm;
+          }
+        }
+
+        return {
+          ...truck,
+          station_name: stationName,
+          alarm: alarmData,
+          last_update_ago: truck.last_online ? `${Math.round((Date.now() - new Date(truck.last_online).getTime()) / 60000)} minutes ago` : null
+        };
+      }));
+
       const response = {
         success: true,
         timestamp: new Date().toISOString(),
-        data: (trucks || []).map(truck => ({
-          ...truck,
-          last_update_ago: truck.last_online ? `${Math.round((Date.now() - new Date(truck.last_online).getTime()) / 60000)} minutes ago` : null
-        }))
+        data: enhanced
       };
 
       res.json(response);
@@ -229,7 +263,7 @@ router.post('/set_firetruck_active.php', async (req, res) => {
     try {
       const status = is_active ? 'available' : 'offline';
       const { error: updateErr } = await supabase
-        .from('firetrucks')
+        .from('_firetrucks')
         .update({ is_active: is_active ? 1 : 0, status, last_online: new Date().toISOString() })
         .eq('truck_id', truck_id);
 

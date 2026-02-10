@@ -10,7 +10,7 @@ router.get('/firestations', async (req, res) => {
   try {
     console.log('[GET /firestations] Request received');
     const { data: rows, error } = await supabase
-      .from('_fire_stations')
+      .from('fire_stations')
       .select('*')
       .order('station_name', { ascending: true });
     
@@ -29,7 +29,7 @@ router.get('/firestations/:id', async (req, res) => {
   try {
     const stationId = req.params.id;
     const { data: rows, error } = await supabase
-      .from('_fire_stations')
+      .from('fire_stations')
       .select('*')
       .eq('station_id', stationId)
       .single();
@@ -59,7 +59,7 @@ router.post('/firestations', authenticateToken, requireRole('admin'), async (req
 
     // Insert station via Supabase
     const { data: insertResult, error: insertErr } = await supabase
-      .from('_fire_stations')
+      .from('fire_stations')
       .insert([
         {
           station_name: stationName,
@@ -105,7 +105,7 @@ router.put('/firestations/:id', authenticateToken, requireRole('admin'), async (
     }
 
     const { data: updatedRows, error: updateErr } = await supabase
-      .from('_fire_stations')
+      .from('fire_stations')
       .update(updates)
       .eq('station_id', stationId)
       .select('station_id');
@@ -128,7 +128,7 @@ router.delete('/firestations/:id', authenticateToken, requireRole('admin'), asyn
   try {
     const stationId = req.params.id;
     const { data: deleted, error: deleteErr } = await supabase
-      .from('_fire_stations')
+      .from('fire_stations')
       .delete()
       .eq('station_id', stationId)
       .select('station_id');

@@ -30,10 +30,22 @@ router.post('/station-readiness', authenticateToken, async (req, res) => {
 
     try {
       console.log('[POST /station-readiness] Inserting readiness record...');
+      
+      // Get max ID to determine next ID (workaround for sequence issue)
+      const { data: maxData, error: maxError } = await supabase
+        .from('station_readiness')
+        .select('readiness_id', { count: 'exact' })
+        .order('readiness_id', { ascending: false })
+        .limit(1);
+
+      const nextId = (maxData && maxData.length > 0) ? maxData[0].readiness_id + 1 : 1;
+      console.log('[POST /station-readiness] Next ID to use:', nextId);
+
       const { data: result, error: insertErr } = await supabase
-        .from('_station_readiness')
+        .from('station_readiness')
         .insert([
           {
+            readiness_id: nextId,
             station_id: assignedStationId,
             submitted_by_user_id: null,
             status,
@@ -49,22 +61,10 @@ router.post('/station-readiness', authenticateToken, async (req, res) => {
         throw insertErr;
       }
 
-      console.log('[POST /station-readiness] Insert success, updating station...');
-      const isReady = status === 'READY' ? 1 : 0;
-      const { error: updateErr } = await supabase
-        .from('_fire_stations')
-        .update({ is_ready: isReady, last_status_update: new Date().toISOString() })
-        .eq('station_id', assignedStationId);
-
-      if (updateErr) {
-        console.error('[POST /station-readiness] Update error:', updateErr);
-        throw updateErr;
-      }
-
-      console.log('[POST /station-readiness] Success');
+      console.log('[POST /station-readiness] Insert success, ID:', result?.readiness_id);
       res.status(201).json({
         message: 'Station readiness submitted successfully',
-        readinessId: result?.readiness_id || null,
+        readinessId: result?.readiness_id || nextId,
         stationId: assignedStationId,
         status,
         readinessPercentage
@@ -88,8 +88,8 @@ router.get('/station-readiness/:stationId', authenticateToken, async (req, res) 
     const { stationId } = req.params;
 
     const { data: readiness, error: readinessErr } = await supabase
-      .from('_station_readiness')
-      .select('*, _fire_stations(station_name)')
+      .from('station_readiness')
+      .select('*, fire_stations(station_name)')
       .eq('station_id', stationId)
       .order('submitted_at', { ascending: false })
       .limit(1);
@@ -104,7 +104,7 @@ router.get('/station-readiness/:stationId', authenticateToken, async (req, res) 
     res.json({
       readinessId: record.readiness_id,
       stationId: record.station_id,
-      stationName: record._fire_stations?.[0]?.station_name || null,
+      stationName: record.fire_stations?.[0]?.station_name || null,
       status: record.status,
       readinessPercentage: record.readiness_percentage,
       equipmentChecklist: typeof record.equipment_checklist === 'string' ? JSON.parse(record.equipment_checklist) : record.equipment_checklist,
@@ -127,8 +127,8 @@ router.get('/stations-readiness-overview', authenticateToken, async (req, res) =
     
     // Fetch stations, then latest readiness per station
     const { data: stations, error: stationsErr } = await supabase
-      .from('_fire_stations')
-      .select('station_id, station_name, is_ready, last_status_update')
+      .from('fire_stations')
+      .select('station_id, station_name')
       .order('station_name', { ascending: true });
 
     if (stationsErr) {
@@ -142,7 +142,7 @@ router.get('/stations-readiness-overview', authenticateToken, async (req, res) =
 
     for (const s of stations || []) {
       const { data: latest, error: latestErr } = await supabase
-        .from('_station_readiness')
+        .from('station_readiness')
         .select('*')
         .eq('station_id', s.station_id)
         .order('submitted_at', { ascending: false })
@@ -157,12 +157,10 @@ router.get('/stations-readiness-overview', authenticateToken, async (req, res) =
       overview.push({
         stationId: s.station_id,
         stationName: s.station_name,
-        isReady: s.is_ready === 1,
         readinessStatus: rec ? rec.status : 'UNKNOWN',
         readinessPercentage: rec ? rec.readiness_percentage : 0,
         lastSubmittedBy: 'N/A',
-        lastReadinessUpdate: rec ? rec.submitted_at : null,
-        lastStatusUpdate: s.last_status_update
+        lastReadinessUpdate: rec ? rec.submitted_at : null
       });
     }
 

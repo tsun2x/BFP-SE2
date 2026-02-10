@@ -3,12 +3,24 @@ import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Platform, Alert } from 'react-native';
 import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
+import { useAuth } from '../context/AuthContext';
+import { supabase } from '../utils/supabaseClient';
 
-// Backend base URL – update this to your actual XAMPP URL
-const API_URL = 'http://10.80.242.64/SE_BFP';
+// Fire alarm levels (match BFP alarm ladder)
+const ALARM_LEVELS = [
+  '1st Alarm',
+  '2nd Alarm',
+  '3rd Alarm',
+  '4th Alarm',
+  '5th Alarm',
+  'Task Force Alpha',
+  'Task Force Bravo',
+  'Task Force Charlie',
+  'Task Force Delta',
+  'General Alarm',
+];
 
-// Node.js backend base URL for firetruck APIs (current alarm, etc.)
-const NODE_API_URL = process.env.EXPO_PUBLIC_NODE_API_URL || 'http://10.80.242.64:5000/api';
+const FIRE_STATUS_OPTIONS = ['Responding', 'On Scene', 'Fire Out'];
 
 const TrackingScreen = () => {
   const [isTracking, setIsTracking] = useState<boolean>(false);
@@ -30,64 +42,27 @@ const TrackingScreen = () => {
   // Send location to server
   const sendLocationToServer = async (location: Location.LocationObject) => {
     try {
-      console.log('Sending location for truck_id =', truckId);
-      
-      const response = await fetch(`${API_URL}/api/update_firetruck_location.php`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
+      console.log('Sending location to Supabase for truck_id =', truckId);
+
+      // Push location to Supabase history table for real-time broadcasting
+      const { error: supabaseError } = await supabase
+        .from('firetruck_location_history')
+        .insert({
           truck_id: truckId,
+          alarm_id: null,
           latitude: location.coords.latitude,
           longitude: location.coords.longitude,
-          speed: location.coords.speed,
-          heading: location.coords.heading,
-          accuracy: location.coords.accuracy,
-          battery_level: 100, // You can get this from battery API if needed
-          alarm_id: null // Optional: Add if you have alarm system
-        }),
-      });
+          speed: location.coords.speed ?? null,
+          heading: location.coords.heading ?? null,
+          accuracy: location.coords.accuracy ?? null,
+          recorded_at: new Date().toISOString(),
+        });
 
-      const rawText = await response.text();
-      console.log('Raw response from update_firetruck_location.php:', rawText);
-
-      let data;
-      try {
-        data = JSON.parse(rawText);
-      } catch (parseError) {
-        console.error('Error parsing JSON from update_firetruck_location.php:', parseError);
-        return;
-      }
-
-      if (!response.ok || !data.success) {
-        console.error('Failed to update location:', data.error || rawText);
+      if (supabaseError) {
+        console.error('Supabase firetruck_location_history insert error:', supabaseError);
       }
     } catch (error) {
-      console.error('Error sending location:', error);
-    }
-  };
-
-  // Fetch current alarm for this firetruck from Node backend
-  const fetchCurrentAlarm = async () => {
-    try {
-      const url = `${NODE_API_URL}/firetrucks/current-alarm?truck_id=${truckId}`;
-      console.log('Fetching current alarm from', url);
-      const response = await fetch(url);
-      const json = await response.json();
-
-      if (!response.ok || !json.success) {
-        console.error('Failed to fetch current alarm:', json);
-        return;
-      }
-
-      if (json.hasAlarm && json.alarm) {
-        console.log('Current alarm for truck', truckId, json.alarm);
-      } else {
-        console.log('No active alarm for truck', truckId);
-      }
-    } catch (err) {
-      console.error('Error fetching current alarm for firetruck:', err);
+      console.error('Error sending location to Supabase:', error);
     }
   };
 
@@ -97,18 +72,6 @@ const TrackingScreen = () => {
     if (!hasPermission) return;
 
     try {
-      // Check if there is a current alarm for this truck (optional for now)
-      await fetchCurrentAlarm();
-
-      // Mark this truck as active so it appears on civilian maps
-      fetch(`${API_URL}/api/set_firetruck_active.php`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ truck_id: truckId, is_active: 1 }),
-      }).catch((err) => {
-        console.error('Failed to mark truck active:', err);
-      });
-
       // Get current position first
       const currentLocation = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.High,
@@ -146,14 +109,6 @@ const TrackingScreen = () => {
       locationSubscription.current = null;
     }
     setIsTracking(false);
-    // Inform backend that this truck is now inactive so it can be hidden from maps
-    fetch(`${API_URL}/api/set_firetruck_active.php`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ truck_id: truckId, is_active: 0 }),
-    }).catch((err) => {
-      console.error('Failed to mark truck inactive:', err);
-    });
   };
 
   // Clean up on unmount

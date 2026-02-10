@@ -60,7 +60,8 @@ io.on('connection', (socket) => {
             phone_number: data.phoneNumber,
             password: 'temp_' + Date.now(),
             role: 'end_user',
-            email: `caller_${Date.now()}@bfp.gov`
+            email: `caller_${Date.now()}@bfp.gov`,
+            id_number: `caller_${Date.now()}`
           }])
           .select('user_id')
           .single();

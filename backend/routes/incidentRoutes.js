@@ -250,6 +250,47 @@ router.get('/incidents', authenticateToken, async (req, res) => {
   }
 });
 
+// Get latest firetruck locations from history table (one latest point per truck)
+router.get('/firetruck-locations', async (req, res) => {
+  try {
+    // Only consider locations from the last 30 seconds so we show "active" trucks
+    const now = new Date();
+    const cutoff = new Date(now.getTime() - 30_000).toISOString();
+
+    const { data: rows, error } = await supabase
+      .from('firetruck_location_history')
+      .select('truck_id, latitude, longitude, recorded_at')
+      .gte('recorded_at', cutoff)
+      .order('recorded_at', { ascending: false })
+      .limit(200);
+
+    if (error) throw error;
+
+    const latestByTruck = new Map();
+    (rows || []).forEach((row) => {
+      if (!row || row.truck_id == null) return;
+      if (!latestByTruck.has(row.truck_id)) {
+        latestByTruck.set(row.truck_id, row);
+      }
+    });
+
+    const locations = Array.from(latestByTruck.values()).map((r) => ({
+      truck_id: r.truck_id,
+      latitude: r.latitude,
+      longitude: r.longitude,
+      recorded_at: r.recorded_at,
+    }));
+
+    res.json({ locations, total: locations.length });
+  } catch (error) {
+    console.error('Get firetruck-locations error:', error);
+    res.status(500).json({
+      message: 'Failed to fetch firetruck locations',
+      error: error.message,
+    });
+  }
+});
+
 // Get incident details
 router.get('/incidents/:alarmId', authenticateToken, async (req, res) => {
   try {

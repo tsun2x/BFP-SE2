@@ -1,6 +1,6 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 import { Alert } from 'react-native';
-import { API_URL } from '../config';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export type AuthUser = {
   id: number;
@@ -31,6 +31,25 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
+  const STORAGE_KEY = 'firetruck_local_user';
+
+  // Load any previously saved local user on app start
+  useEffect(() => {
+    const loadUser = async () => {
+      try {
+        const stored = await AsyncStorage.getItem(STORAGE_KEY);
+        if (stored) {
+          const parsed = JSON.parse(stored) as { user: AuthUser; password: string };
+          setUser(parsed.user);
+          setToken(null);
+        }
+      } catch (error) {
+        // ignore
+      }
+    };
+    loadUser();
+  }, []);
+
   const login = async (idNumber: string, password: string) => {
     if (!idNumber || !password) {
       throw new Error('Please enter your BFP ID and password.');
@@ -39,48 +58,42 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setIsLoading(true);
 
     try {
-      const response = await fetch(`${API_URL}/api/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ idNumber, password }),
-      });
+      // If a local user already exists, validate credentials against it
+      const existing = await AsyncStorage.getItem(STORAGE_KEY);
 
-      const rawText = await response.text();
-
-      let data: any;
-      try {
-        data = JSON.parse(rawText);
-      } catch (e) {
-        console.error('Failed to parse login response:', rawText);
-        throw new Error('Unexpected server response.');
+      if (existing) {
+        const parsed = JSON.parse(existing) as { user: AuthUser; password: string };
+        if (parsed.user.idNumber === idNumber && parsed.password === password) {
+          setUser(parsed.user);
+          setToken(null);
+          return;
+        }
+        throw new Error('Invalid ID or password.');
       }
 
-      if (!response.ok) {
-        const message = data?.message || 'Invalid ID or password.';
-        throw new Error(message);
-      }
+      // No user saved yet: create one locally using the provided credentials
+      // e.g. first login with BFP-00009 / testpass321 will become the local account
+      const newUser: AuthUser = {
+        id: Date.now(),
+        idNumber,
+        name: idNumber,
+        firstName: null,
+        lastName: null,
+        rank: null,
+        substation: null,
+        role: 'driver',
+        assignedStationId: null,
+        stationName: null,
+        stationType: null,
+      };
 
-      if (!data?.token || !data?.user) {
-        console.error('Login response missing token or user:', data);
-        throw new Error('Login failed. Please try again.');
-      }
+      await AsyncStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({ user: newUser, password }),
+      );
 
-      const payloadUser = data.user;
-
-      setUser({
-        id: payloadUser.id,
-        idNumber: payloadUser.idNumber,
-        name: payloadUser.name,
-        firstName: payloadUser.firstName ?? null,
-        lastName: payloadUser.lastName ?? null,
-        rank: payloadUser.rank ?? null,
-        substation: payloadUser.substation ?? null,
-        role: payloadUser.role,
-        assignedStationId: payloadUser.assignedStationId ?? null,
-        stationName: payloadUser.stationInfo?.station_name ?? null,
-        stationType: payloadUser.stationInfo?.station_type ?? null,
-      });
-      setToken(data.token);
+      setUser(newUser);
+      setToken(null);
     } catch (error: any) {
       const message = error?.message || 'Login failed. Please try again.';
       Alert.alert('Login failed', message);
@@ -93,6 +106,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const logout = () => {
     setUser(null);
     setToken(null);
+     AsyncStorage.removeItem(STORAGE_KEY).catch(() => {});
   };
 
   return (

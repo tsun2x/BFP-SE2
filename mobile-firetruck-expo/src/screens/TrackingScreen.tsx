@@ -83,8 +83,8 @@ const TrackingScreen = () => {
       const subscription = await Location.watchPositionAsync(
         {
           accuracy: Location.Accuracy.High,
-          timeInterval: 5000, // send update at most every 5 seconds
-          distanceInterval: 10, // or when moved ~10 meters
+          timeInterval: 5000, // send update roughly every 5 seconds
+          distanceInterval: 0, // always send based on time interval, even if not moving
         },
         async (newLocation) => {
           setLocation(newLocation);

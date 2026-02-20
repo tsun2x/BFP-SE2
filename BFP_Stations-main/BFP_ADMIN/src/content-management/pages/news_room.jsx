@@ -126,7 +126,10 @@ function NewsRoom() {
         <div className="nr-modal-overlay" role="dialog" aria-modal="true">
           <div className="nr-modal">
             <div className="nr-modal-header">
-              <button className="nr-back" onClick={() => setShowNewsModal(false)}>Back</button>
+              <button className="nr-back" onClick={() => setShowNewsModal(false)}>
+                <i className="fa-solid fa-arrow-left"></i>
+                <span>Back</span>
+              </button>
               <h2 className="nr-title">News Room CMS</h2>
               <div className="nr-spacer" />
             </div>
@@ -159,7 +162,12 @@ function NewsRoom() {
                 <div className="nr-field"><label>Description</label><textarea className="nr-input" rows="3" placeholder="Value" value={form.description} onChange={(e)=>setForm({...form, description:e.target.value})} /></div>
                 <div className="nr-field"><label>Author</label><input className="nr-input nr-input--sm" placeholder="Value" value={form.author} onChange={(e)=>setForm({...form, author:e.target.value})} /></div>
                 <div className="nr-field"><label>Additional Photos <span className="nr-help">optional extra images for more content</span></label><div className="nr-dropzone nr-dropzone--sm"><span className="nr-drop-icon" /></div></div>
-                <div className="nr-actions"><button type="submit" className="nr-post">{form.id ? 'Update News' : 'Post News'}</button></div>
+                <div className="nr-actions">
+                  <button type="submit" className="nr-post">
+                    <i className="fa-solid fa-paper-plane"></i>
+                    <span>{form.id ? 'Update News' : 'Post News'}</span>
+                  </button>
+                </div>
               </form>
             </div>
           </div>

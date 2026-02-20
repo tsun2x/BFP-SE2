@@ -16,27 +16,33 @@ export default function BranchStatus() {
     try {
       setLoading(true);
       const token = localStorage.getItem("authToken");
-      const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+      const apiUrl =
+        import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
       if (!token) {
         setError("Not authenticated");
         return;
       }
 
-      const response = await fetch(`${apiUrl}/stations-readiness-overview`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`
+      const response = await fetch(
+        `${apiUrl}/stations-readiness-overview`,
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
         }
-      });
+      );
 
       if (!response.ok) {
         throw new Error("Failed to fetch station readiness data");
       }
 
       const data = await response.json();
-      // Ensure data is an array - handle both direct array and wrapped response
-      const stationsData = Array.isArray(data) ? data : (data?.overview || []);
+      const stationsData = Array.isArray(data)
+        ? data
+        : data?.overview || [];
+
       setStations(stationsData);
       setError("");
     } catch (err) {
@@ -47,99 +53,176 @@ export default function BranchStatus() {
     }
   };
 
-  const statusMap = {
-    READY: { class: "status-ready", icon: "fa-solid fa-circle-check" },
-    NOT_READY: {
-      class: "status-notready",
-      icon: "fa-solid fa-circle-xmark",
-    },
-    PARTIALLY_READY: { class: "status-partial", icon: "fa-solid fa-circle-half-stroke" },
-    UNKNOWN: { class: "status-unknown", icon: "fa-solid fa-circle-question" },
-  };
+  /* ========================= */
+  /* SUMMARY CALCULATIONS      */
+  /* ========================= */
+  const totalStations = stations.length;
+  const readyCount = stations.filter(
+    (s) => s.readinessStatus === "READY"
+  ).length;
+  const notReadyCount = stations.filter(
+    (s) => s.readinessStatus === "NOT_READY"
+  ).length;
+  const partialCount = stations.filter(
+    (s) => s.readinessStatus === "PARTIALLY_READY"
+  ).length;
+  const unknownCount = stations.filter(
+    (s) =>
+      !s.readinessStatus || s.readinessStatus === "UNKNOWN"
+  ).length;
 
   return (
     <div className="status-page">
-      <h1 className="page-title">Station Status Overview</h1>
+      {/* HEADER */}
+      <div className="page-header">
+        <h1 className="page-title">Station Status Overview</h1>
+        <p className="page-subtitle">
+          City Command Monitoring Panel
+        </p>
+      </div>
 
+      {/* ERROR */}
       {error && (
-        <div style={{ 
-          padding: '16px', 
-          backgroundColor: '#fee', 
-          color: '#c00', 
-          borderRadius: '8px', 
-          marginBottom: '16px',
-          textAlign: 'center'
-        }}>
+        <div className="error-box">
           {error}
-          <button 
-            onClick={fetchStationsReadiness}
-            style={{ marginLeft: '16px', padding: '8px 16px', cursor: 'pointer' }}
-          >
+          <button onClick={fetchStationsReadiness}>
             Retry
           </button>
         </div>
       )}
 
+      {/* SUMMARY DASHBOARD */}
+      {!loading && stations.length > 0 && (
+        <div className="summary-grid">
+          <div className="summary-card">
+            <div className="card-icon">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                <line x1="9" y1="9" x2="15" y2="9"></line>
+                <line x1="9" y1="15" x2="15" y2="15"></line>
+              </svg>
+            </div>
+            <div className="card-content">
+              <h3>{totalStations}</h3>
+              <p>Total Stations</p>
+            </div>
+          </div>
+
+          <div className="summary-card">
+            <div className="card-icon">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <polyline points="20 6 9 17 4 12"></polyline>
+              </svg>
+            </div>
+            <div className="card-content">
+              <h3>{readyCount}</h3>
+              <p>Ready</p>
+            </div>
+          </div>
+
+          <div className="summary-card">
+            <div className="card-icon">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                <line x1="12" y1="9" x2="12" y2="13"></line>
+                <line x1="12" y1="17" x2="12.01" y2="17"></line>
+              </svg>
+            </div>
+            <div className="card-content">
+              <h3>{partialCount}</h3>
+              <p>Partially Ready</p>
+            </div>
+          </div>
+
+          <div className="summary-card">
+            <div className="card-icon">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="15" y1="9" x2="9" y2="15"></line>
+                <line x1="9" y1="9" x2="15" y2="15"></line>
+              </svg>
+            </div>
+            <div className="card-content">
+              <h3>{notReadyCount}</h3>
+              <p>Not Ready</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <hr className="summary-divider" />
+
+      {/* STATES */}
       {loading ? (
-        <div style={{ textAlign: 'center', padding: '40px', fontSize: '18px', opacity: 0.6 }}>
+        <div className="state-message">
           Loading station readiness data...
         </div>
       ) : stations.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '40px', fontSize: '18px', opacity: 0.6 }}>
+        <div className="state-message">
           No stations available
         </div>
       ) : (
         <div className="stations-grid">
           {stations.map((station) => {
-            const status = station.readinessStatus || "UNKNOWN";
-            const readinessPercentage = station.readinessPercentage || 0;
-            const submittedBy = station.lastSubmittedBy || "Unknown";
-            const submittedAt = station.lastReadinessUpdate ? new Date(station.lastReadinessUpdate).toLocaleDateString() : "Never";
+            const status =
+              station.readinessStatus || "UNKNOWN";
+            const readinessPercentage =
+              station.readinessPercentage || 0;
+            const submittedBy =
+              station.lastSubmittedBy || "Unknown";
+            const submittedAt =
+              station.lastReadinessUpdate
+                ? new Date(
+                    station.lastReadinessUpdate
+                  ).toLocaleDateString()
+                : "Never";
 
             return (
-              <div key={station.stationId} className="station-card">
+              <div
+                key={station.stationId}
+                className={`station-card ${status.toLowerCase()}`}
+              >
                 <div className="station-header">
                   <h2>{station.stationName}</h2>
-                  <small style={{ opacity: 0.7, fontSize: '12px' }}>
-                    {station.stationType === 'MAIN' ? 'Main Station' : 'Branch Station'}
+                  <small>
+                    {station.stationType === "MAIN"
+                      ? "Main Station"
+                      : "Branch Station"}
                   </small>
                 </div>
 
                 <div className="station-status">
-                  <i
-                    className={`status-icon ${statusMap[status]?.icon} ${statusMap[status]?.class}`}
-                  ></i>
-
                   <span
-                    className={`status-text ${statusMap[status]?.class}`}
+                    className={`status-badge ${status.toLowerCase().replace(/_/g, '_')}`}
                   >
                     {status.replace(/_/g, " ")}
                   </span>
                 </div>
 
-                <div style={{ marginTop: '12px', fontSize: '14px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                    <span>Readiness:</span>
-                    <strong>{readinessPercentage}%</strong>
+                <div className="readiness-info">
+                  <div className="readiness-top">
+                    <span>Readiness</span>
+                    <strong>
+                      {readinessPercentage}%
+                    </strong>
                   </div>
-                  <div style={{ 
-                    width: '100%', 
-                    height: '8px', 
-                    backgroundColor: '#eee', 
-                    borderRadius: '4px', 
-                    overflow: 'hidden',
-                    marginBottom: '12px'
-                  }}>
-                    <div style={{
-                      width: `${readinessPercentage}%`,
-                      height: '100%',
-                      backgroundColor: readinessPercentage === 100 ? '#4caf50' : readinessPercentage >= 50 ? '#ffc107' : '#f44336',
-                      transition: 'width 0.3s ease'
-                    }} />
+
+                  <div className="readiness-bar-container">
+                    <div
+                      className="readiness-bar"
+                      style={{
+                        width: `${readinessPercentage}%`,
+                      }}
+                    />
                   </div>
-                  <div style={{ fontSize: '12px', opacity: 0.7 }}>
-                    <div>Last by: {submittedBy}</div>
-                    <div>Date: {submittedAt}</div>
+
+                  <div className="station-meta">
+                    <div>
+                      Last by: {submittedBy}
+                    </div>
+                    <div>
+                      Date: {submittedAt}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -148,18 +231,11 @@ export default function BranchStatus() {
         </div>
       )}
 
-      <div style={{ marginTop: '24px', textAlign: 'center' }}>
-        <button 
+      {/* REFRESH BUTTON */}
+      <div className="refresh-container">
+        <button
+          className="refresh-button"
           onClick={fetchStationsReadiness}
-          style={{ 
-            padding: '10px 20px', 
-            backgroundColor: '#2196f3', 
-            color: 'white', 
-            border: 'none', 
-            borderRadius: '4px', 
-            cursor: 'pointer',
-            fontSize: '14px'
-          }}
         >
           Refresh Data
         </button>

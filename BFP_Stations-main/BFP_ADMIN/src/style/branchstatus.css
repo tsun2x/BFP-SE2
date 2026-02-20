@@ -1,100 +1,237 @@
+/* ===== PAGE LAYOUT ===== */
 .status-page {
-  width: 100%;
-  padding: 20px 30px;
-  box-sizing: border-box;
+  padding: 30px 40px;
+  background: #f4f4f49d;
+  min-height: 100vh;
+  font-family: 'Poppins', sans-serif;
+  color: #222;
 }
 
-/* Page Title (inherits general style) */
-.page-title {
+/* ===== HEADER ===== */
+.page-header {
   margin-bottom: 25px;
 }
 
-/* Grid container */
+.page-title {
+  font-size: 28px;
+  font-weight: 700;
+  color: #b30000; /* BFP RED */
+}
+
+.page-subtitle {
+  color: #666;
+  font-size: 14px;
+  margin-top: 4px;
+}
+
+/* ===== ERROR ===== */
+.error-box {
+  background: #ffe5e5;
+  border-left: 5px solid #b30000;
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.error-box button {
+  background: #b30000;
+  color: white;
+  border: none;
+  padding: 6px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+/* ===== SUMMARY GRID ===== */
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 18px;
+  margin-bottom: 25px;
+}
+
+.summary-card {
+  background: white;
+  border-radius: 14px;
+  padding: 18px;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+  transition: 0.2s ease;
+}
+
+.summary-card:hover {
+  transform: translateY(-3px);
+}
+
+.card-icon {
+  background: #b30000;
+  color: white;
+  padding: 10px;
+  border-radius: 10px;
+}
+
+.card-content h3 {
+  margin: 0;
+  font-size: 22px;
+  color: #111;
+}
+
+.card-content p {
+  margin: 0;
+  font-size: 13px;
+  color: #777;
+}
+
+.summary-divider {
+  border: none;
+  border-top: 1px solid #ddd;
+  margin: 25px 0;
+}
+
+/* ===== STATE MESSAGE ===== */
+.state-message {
+  text-align: center;
+  padding: 30px;
+  color: #777;
+  font-size: 15px;
+}
+
+/* ===== STATION GRID ===== */
 .stations-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 25px;
-  margin-top: 15px;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 22px;
 }
 
-/* Individual station card */
+/* ===== STATION CARD ===== */
 .station-card {
-  background: #ffffff;
-  padding: 25px;
-  border-radius: 14px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-  transition: 0.2s ease;
-  border-left: 6px solid transparent;
+  background: white;
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.08);
+  transition: 0.25s ease;
+  border-top: 6px solid #ccc;
 }
 
-/* Hover effect */
 .station-card:hover {
   transform: translateY(-4px);
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
 }
 
-/* Card header */
+/* STATUS COLORS */
+.station-card.ready {
+  border-top-color: #2e7d32;
+}
+
+.station-card.partially_ready {
+  border-top-color: #ff9800;
+}
+
+.station-card.not_ready {
+  border-top-color: #b30000;
+}
+
+.station-card.unknown {
+  border-top-color: #555;
+}
+
 .station-header h2 {
-  font-size: 20px;
-  font-weight: 600;
-  color: #222;
-  margin-bottom: 18px;
-}
-
-/* Status row */
-.station-status {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-/* Status icon styling */
-.status-icon {
-  font-size: 26px;
-  width: 28px;
-  text-align: center;
-}
-
-/* Status text styling */
-.status-text {
+  margin: 0;
   font-size: 18px;
   font-weight: 600;
 }
 
-/* Status Colors */
-.status-ready {
-  color: #1db954; /* green */
+.station-header small {
+  color: #888;
+  font-size: 12px;
 }
 
-.status-notready {
-  color: #e63946; /* red */
+/* ===== STATUS BADGE ===== */
+.status-badge {
+  display: inline-block;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  margin: 10px 0;
 }
 
-.status-dispatch {
-  color: #f1c40f; /* yellow */
+.status-badge.ready {
+  background: #e8f5e9;
+  color: #2e7d32;
 }
 
-.status-maintenance {
-  color: #e67e22; /* orange */
+.status-badge.partially_ready {
+  background: #fff3e0;
+  color: #ef6c00;
 }
 
-/* Left border indicator based on status */
-.station-card .status-ready ~ .station-card {
-  border-left-color: #1db954;
+.status-badge.not_ready {
+  background: #ffebee;
+  color: #b30000;
 }
 
-.station-card.ready {
-  border-left: 6px solid #1db954;
+.status-badge.unknown {
+  background: #eee;
+  color: #444;
 }
 
-.station-card.notready {
-  border-left: 6px solid #e63946;
+/* ===== READINESS ===== */
+.readiness-info {
+  margin-top: 10px;
 }
 
-.station-card.dispatch {
-  border-left: 6px solid #f1c40f;
+.readiness-top {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
 }
 
-.station-card.maintenance {
-  border-left: 6px solid #e67e22;
+.readiness-bar-container {
+  width: 100%;
+  background: #eee;
+  height: 8px;
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 8px 0 12px;
+}
+
+.readiness-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #b30000, #ff4d4d);
+  border-radius: 8px;
+  transition: width 0.4s ease;
+}
+
+/* ===== META ===== */
+.station-meta {
+  font-size: 12px;
+  color: #666;
+  display: flex;
+  justify-content: space-between;
+}
+
+/* ===== REFRESH BUTTON ===== */
+.refresh-container {
+  margin-top: 30px;
+  text-align: center;
+}
+
+.refresh-button {
+  background: #b30000;
+  color: white;
+  border: none;
+  padding: 12px 28px;
+  border-radius: 10px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: 0.2s;
+}
+
+.refresh-button:hover {
+  background: #8f0000;
 }

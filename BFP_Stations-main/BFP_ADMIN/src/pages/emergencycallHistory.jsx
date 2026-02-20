@@ -88,11 +88,16 @@ export default function EmergencyCallHistory() {
       <div className="officer-search-card">
 
         {/* SEARCH */}
-        <input
-          type="text"
-          placeholder="Search Officer Name..."
-          className="officer-search-input"
-        />
+        <div className="search-input-wrapper">
+          <i className="fa-solid fa-search search-icon"></i>
+          <input
+            type="text"
+            placeholder="Search Caller Name..."
+            className="officer-search-input"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </div>
 
         {/* FILTERS */}
         <div className="officer-filters">

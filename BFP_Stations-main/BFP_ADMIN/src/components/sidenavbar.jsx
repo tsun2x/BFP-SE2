@@ -1,5 +1,5 @@
 import { NavLink, useNavigate } from "react-router-dom";
-import "../style/navbar.css";
+import "../style/sidebar.css";
 
 export default function Sidebar() {
   const navigate = useNavigate();
@@ -15,7 +15,7 @@ export default function Sidebar() {
     <aside className="sidebar">
 
       {/* Logo / Avatar */}
-      <div className="station-name">BFP<br />Super Admin</div>
+      <div className="station-name">Zamboanga Central<br />Fire Station</div>
 
       {/* MAIN NAVIGATION */}
       <nav className="nav">

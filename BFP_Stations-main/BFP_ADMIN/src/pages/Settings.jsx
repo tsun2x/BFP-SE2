@@ -1,6 +1,7 @@
 import { useState, useContext, useEffect } from "react";
 import { AuthContext } from "../context/AuthContext";
 import "../style/settings.css";
+import ConfirmModal from "../components/ConfirmModal";
 
 export default function Settings() {
   const { user } = useContext(AuthContext);
@@ -800,10 +801,14 @@ export default function Settings() {
                   )}
                   {/* Modal for delete confirmation with password */}
                   {deleteModalStationId && (
-                    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10000 }}>
-                      <div style={{ width: 480, maxWidth: '95%', background: '#fff', borderRadius: 10, padding: 24, boxShadow: '0 10px 30px rgba(0,0,0,0.2)', position: 'relative' }}>
-                        <h3 style={{ marginTop: 0, color: '#c41e3a' }}>Delete Station</h3>
-                        <p style={{ color: '#555', marginBottom: 20 }}>This action cannot be undone. Please enter your password to confirm deletion.</p>
+                    <div className="modal-overlay">
+                      <div className="modal-card">
+                        <div className="modal-icon">
+                          <i className="fa-solid fa-trash"></i>
+                        </div>
+                        <h3 className="modal-title">Delete Station</h3>
+                        <p className="modal-message">This action cannot be undone. Please enter your password to confirm deletion.</p>
+                        
                         <div className="form-group">
                           <label>Password</label>
                           <input 
@@ -813,11 +818,17 @@ export default function Settings() {
                             onKeyPress={(e) => e.key === 'Enter' && handleConfirmDelete()}
                             placeholder="Enter your password"
                             autoFocus
+                            className="modal-input"
                           />
                         </div>
-                        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 24 }}>
-                          <button className="btn btn-outline" onClick={() => { setDeleteModalStationId(null); setDeletePassword(''); }}>Cancel</button>
-                          <button className="btn btn-danger" onClick={handleConfirmDelete}>Delete Station</button>
+                        
+                        <div className="modal-actions">
+                          <button className="modal-btn cancel" onClick={() => { setDeleteModalStationId(null); setDeletePassword(''); }}>
+                            <i className="fa-solid fa-xmark"></i> Cancel
+                          </button>
+                          <button className="modal-btn confirm" onClick={handleConfirmDelete}>
+                            <i className="fa-solid fa-trash"></i> Delete Station
+                          </button>
                         </div>
                       </div>
                     </div>

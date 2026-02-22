@@ -9,6 +9,7 @@ import incidentRoutes from './routes/incidentRoutes.js';
 import fireStationsRoutes from './routes/fireStations.js';
 import readinessRoutes from './routes/readinessRoutes.js';
 import compatibilityRoutes from './routes/compatibilityRoutes.js';
+import firetruckTrackingRoutes from './routes/firetruckTrackingRoutes.js';
 import { authenticateToken } from './middleware/auth.js';
 
 dotenv.config();
@@ -135,6 +136,9 @@ app.use('/api', readinessRoutes);
 
 // Fire stations resource (protected endpoints for admin)
 app.use('/api', fireStationsRoutes);
+
+// Firetruck tracking routes (Supabase-backed)
+app.use('/api', firetruckTrackingRoutes);
 
 // Compatibility routes - Old PHP endpoint paths for backward compatibility with mobile apps
 app.use('/api', compatibilityRoutes);

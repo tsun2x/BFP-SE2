@@ -1,0 +1,262 @@
+/* ===== Reset ===== */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  font-family: "Poppins", "Segoe UI", sans-serif;
+}
+
+/* ===== Page Layout ===== */
+.signup-container {
+  display: flex;
+  min-height: 100vh;
+  background: #f4f5f7;
+}
+
+/* ===== Gradient Side Strip ===== */
+.signup-sidebar {
+  width: 90px;
+
+  background:
+    linear-gradient(
+      180deg,
+      #1f1f1f 0%,
+      #7a0f13 40%,
+      #b11217 100%
+    ),
+    repeating-linear-gradient(
+      45deg,
+      rgba(255,255,255,0.04),
+      rgba(255,255,255,0.04) 2px,
+      transparent 2px,
+      transparent 6px
+    );
+
+  box-shadow: 4px 0 20px rgba(0, 0, 0, 0.15);
+}
+
+/* ===== Main Wrapper ===== */
+.signup-wrapper {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  padding: 60px 40px;
+}
+
+/* ===== Card ===== */
+.signup-card {
+  width: 100%;
+  max-width: 840px; /* increased from 720px */
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 60px 70px; /* increased padding */
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+}
+
+/* ===== Title ===== */
+.signup-title {
+  font-size: 30px; /* slightly larger */
+  font-weight: 600;
+  color: #222;
+  margin-bottom: 35px;
+}
+
+/* Divider */
+.signup-card hr {
+  border: none;
+  border-top: 1px solid #e5e5e5;
+  margin: 30px 0;
+}
+
+/* ===== Section Titles ===== */
+.section-title {
+  font-size: 17px; /* slightly larger */
+  font-weight: 600;
+  color: #b11217;
+  margin: 40px 0 22px;
+  position: relative;
+  padding-left: 18px;
+}
+
+.section-title::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 3px;
+  height: 18px;
+  width: 4px;
+  background: #b11217;
+  border-radius: 2px;
+}
+
+/* ===== Form Rows ===== */
+.auth-row {
+  display: flex;
+  gap: 30px;
+  margin-bottom: 25px; /* slightly bigger spacing */
+}
+
+.auth-group {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ===== Labels ===== */
+.auth-group label {
+  font-size: 15px; /* slightly larger */
+  font-weight: 500;
+  margin-bottom: 8px;
+  color: #333;
+}
+
+/* ===== Inputs ===== */
+.auth-group input,
+.auth-group select {
+  padding: 14px 16px; /* bigger inputs */
+  border: 1px solid #ddd;
+  border-radius: 10px;
+  font-size: 15px; /* larger font */
+  background: #fafafa;
+  transition: all 0.25s ease;
+}
+
+.auth-group input:focus,
+.auth-group select:focus {
+  background: #fff;
+  border-color: #b11217;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(177, 18, 23, 0.08);
+}
+
+/* ===== Disabled Select ===== */
+.disabled-input {
+  background: #f0f0f0;
+  color: #888;
+}
+
+/* ===== Errors ===== */
+.error {
+  border-color: #dc3545 !important;
+}
+
+.error-message {
+  font-size: 13px;
+  color: #dc3545;
+  margin-top: 6px;
+}
+
+.auth-error {
+  background: #fdecea;
+  color: #842029;
+  padding: 14px; /* slightly bigger */
+  border-radius: 8px;
+  margin-bottom: 22px;
+  font-size: 14px;
+}
+
+/* ===== Buttons ===== */
+.signup-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 18px; /* slightly bigger */
+  margin-top: 35px;
+  border-top: 1px solid #eee;
+  padding-top: 28px;
+}
+
+.reset-btn {
+  padding: 12px 24px; /* bigger button */
+  border-radius: 8px;
+  border: 1px solid #b11217;
+  background: transparent;
+  color: #b11217;
+  font-weight: 500;
+  cursor: pointer;
+  transition: 0.25s ease;
+}
+
+.reset-btn:hover {
+  background: rgba(177, 18, 23, 0.08);
+}
+
+.continue-btn {
+  padding: 12px 28px; /* bigger button */
+  border-radius: 8px;
+  border: none;
+  background: linear-gradient(135deg, #8b0000, #c1121f);
+  color: white;
+  font-weight: 600;
+  cursor: pointer;
+  transition: 0.25s ease;
+}
+
+.continue-btn:hover {
+  opacity: 0.9;
+}
+
+.continue-btn:disabled {
+  background: #bbb;
+  cursor: not-allowed;
+}
+
+/* ===== Bottom Text ===== */
+.auth-bottom {
+  margin-top: 28px;
+  text-align: center;
+  font-size: 15px;
+}
+
+.auth-bottom a {
+  color: #b11217;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.auth-bottom a:hover {
+  text-decoration: underline;
+}
+
+/* ===== Password Strength ===== */
+.password-strength {
+  margin-top: 10px;
+}
+
+.strength-bar {
+  width: 100%;
+  height: 7px; /* slightly taller */
+  background: #eee;
+  border-radius: 5px;
+  overflow: hidden;
+}
+
+.strength-fill {
+  height: 100%;
+  transition: 0.3s ease;
+}
+
+.strength-text {
+  font-size: 13px; /* slightly larger */
+  font-weight: 500;
+  margin-top: 5px;
+}
+
+/* ===== Responsive ===== */
+@media (max-width: 900px) {
+  .signup-sidebar {
+    display: none;
+  }
+
+  .signup-wrapper {
+    padding: 35px 20px;
+  }
+
+  .signup-card {
+    padding: 40px;
+  }
+
+  .auth-row {
+    flex-direction: column;
+    gap: 18px;
+  }
+}

@@ -18,6 +18,7 @@ import Dashboard from "./pages/dashboard";
 import EmergencyCallHistory from "./pages/emergencycallHistory";
 import Officers from "./pages/officersLoginHistory";
 import IncidentReport from "./pages/IncidentReport";
+import ReportSub from "./pages/ReportSub";
 import StationReadiness from "./pages/stationreadiness";
 import Settings from "./pages/Settings";
 import TestPage from "./pages/TestPage";
@@ -267,6 +268,7 @@ function AppContent() {
               <ToastContainer toasts={toasts} />
               <Routes>
                 <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+                <Route path="/substation/reports" element={<ProtectedRoute><ReportSub /></ProtectedRoute>} />
                 <Route path="/emergency-calls" element={<ProtectedRoute><EmergencyCallHistory /></ProtectedRoute>} />
                 <Route path="/officers" element={<ProtectedRoute><Officers /></ProtectedRoute>} />
                 <Route path="/incident-report" element={<ProtectedRoute><IncidentReport /></ProtectedRoute>} />

@@ -1,7 +1,7 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useState, useContext, useEffect } from "react";
 import { AuthContext } from "../context/AuthContext";
-import "../style/auth.css";
+import "../style/sign-up.css";
 
 export default function Signup() {
   const navigate = useNavigate();

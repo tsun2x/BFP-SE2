@@ -9,7 +9,8 @@ const IncomingCallModal = ({ callNumber, onAccept }) => {
         <p><strong>Contact No:</strong> {callNumber}</p>
 
         <div className="modal-buttons">
-          <button className="accept-btn" onClick={onAccept}>Accept</button>
+          <button className="modal-btn cancel">Decline</button>
+          <button className="modal-btn confirm" onClick={onAccept}>Accept</button>
         </div>
       </div>
     </div>

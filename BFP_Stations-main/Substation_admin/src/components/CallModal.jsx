@@ -11,7 +11,7 @@ const CallModal = ({ callData, onClose, topMode }) => {
           <p><strong>Time:</strong> {callData.time}</p>
           <p><strong>Status:</strong> <span className={`status ${String(callData.status || "").toLowerCase()}`}>{callData.status}</span></p>
         </div>
-        <button className="end-btn" onClick={onClose}>End</button>
+        <button className="modal-btn confirm" onClick={onClose}>End</button>
       </div>
     </div>
   );

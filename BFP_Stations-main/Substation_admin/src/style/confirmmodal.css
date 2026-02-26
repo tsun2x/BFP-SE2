@@ -53,13 +53,13 @@
 }
 
 .modal-btn.confirm {
-  background: #ff7a00;
+  background: #dc2626;
   color: white;
   font-weight: 600;
 }
 
 .modal-btn.confirm:hover {
-  background: #d66200;
+  background: #b91c1c;
 }
 
 @keyframes fadeIn {

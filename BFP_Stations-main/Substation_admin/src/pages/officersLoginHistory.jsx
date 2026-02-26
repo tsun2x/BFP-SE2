@@ -36,11 +36,19 @@ export default function OfficerLogInHistory() {
       <div className="officer-search-card">
 
         {/* SEARCH */}
-        <input
-          type="text"
-          placeholder="Search Officer Name..."
-          className="officer-search-input"
-        />
+        <div className="officer-search-wrapper">
+          <span className="officer-search-icon">
+            <svg viewBox="0 0 24 24">
+              <circle cx="11" cy="11" r="8"/>
+              <path d="m21 21-4.35-4.35"/>
+            </svg>
+          </span>
+          <input
+            type="text"
+            placeholder="Search Officer Name..."
+            className="officer-search-input"
+          />
+        </div>
 
         {/* FILTERS */}
         <div className="officer-filters">

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import "../style/incidentdetailspanel.css";
+import ConfirmModal from "./ConfirmModal";
 
 /**
  * Props:
@@ -10,6 +11,7 @@ import "../style/incidentdetailspanel.css";
  */
 export default function IncidentDetailsPanel({ open, onClose, incident, onUpdateStatus }) {
   const [localIncident, setLocalIncident] = useState(null);
+  const [statusModal, setStatusModal] = useState({ open: false, newStatus: null });
   const STATUS_FLOW = [
     "Pending",
     "Dispatch On the Way",
@@ -26,15 +28,21 @@ export default function IncidentDetailsPanel({ open, onClose, incident, onUpdate
 
   const changeStatus = (newStatus) => {
     if (!localIncident) return;
+    setStatusModal({ open: true, newStatus });
+  };
+
+  const confirmStatusChange = () => {
+    if (!statusModal.newStatus) return;
     const now = new Date().toISOString();
     // push to timeline
     const newTimeline = (localIncident.timeline || []).concat({
-      status: newStatus,
+      status: statusModal.newStatus,
       time: now,
     });
-    const updated = { ...localIncident, status: newStatus, timeline: newTimeline };
+    const updated = { ...localIncident, status: statusModal.newStatus, timeline: newTimeline };
     setLocalIncident(updated);
-    if (onUpdateStatus) onUpdateStatus(newStatus, updated);
+    if (onUpdateStatus) onUpdateStatus(statusModal.newStatus, updated);
+    setStatusModal({ open: false, newStatus: null });
   };
 
   const latestStatus = localIncident?.status || "Pending";
@@ -115,11 +123,18 @@ export default function IncidentDetailsPanel({ open, onClose, incident, onUpdate
               Update Status
             </button>
           </div>
-
-      
         </div>
       </div>
+
+      {/* Status Update Confirmation Modal */}
+      {statusModal.open && (
+        <ConfirmModal
+          title="Update Status"
+          message={`Are you sure you want to update the incident status to "${statusModal.newStatus}"?`}
+          onConfirm={confirmStatusChange}
+          onCancel={() => setStatusModal({ open: false, newStatus: null })}
+        />
+      )}
     </div>
   );
 }
-

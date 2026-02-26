@@ -38,6 +38,8 @@ export default function EmergencyCallHistory() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selected, setSelected] = useState(null);
   const [panelOpen, setPanelOpen] = useState(false);
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [typeFilter, setTypeFilter] = useState("all");
 
   // Open right-side panel
   const openPanel = (call) => {
@@ -62,11 +64,23 @@ export default function EmergencyCallHistory() {
     );
   };
 
-  // Search
-  const filteredCalls = calls.filter((c) =>
-    c.caller.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    c.number.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Search and Filter
+  const filteredCalls = calls.filter((c) => {
+    // Search filter
+    const matchesSearch = 
+      c.caller.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      c.number.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      c.type.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      c.location.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    // Status filter
+    const matchesStatus = statusFilter === "all" || c.status === statusFilter;
+    
+    // Type filter
+    const matchesType = typeFilter === "all" || c.type === typeFilter;
+    
+    return matchesSearch && matchesStatus && matchesType;
+  });
 
   // Status Badge UI Mapping
   const getStatusBadgeClass = (status) => {
@@ -84,16 +98,49 @@ export default function EmergencyCallHistory() {
     <div className="call-page">
       <h1 className="call-title">Emergency Call History</h1>
 
-      {/* SEARCH BAR */}
+      {/* SEARCH AND FILTER BAR */}
       <div className="call-search-row">
         <div className="call-search-wrapper">
-          <span className="call-search-icon">🔍</span>
+          <span className="call-search-icon">
+            <svg viewBox="0 0 24 24">
+              <circle cx="11" cy="11" r="8"/>
+              <path d="m21 21-4.35-4.35"/>
+            </svg>
+          </span>
           <input
             className="call-search-input"
-            placeholder="Search Caller Name or Number..."
+            placeholder="Search Caller, Number, Location, or Type..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
+        </div>
+        
+        {/* FILTER DROPDOWNS */}
+        <div className="filter-dropdowns">
+          <select 
+            className="filter-select"
+            value={statusFilter} 
+            onChange={(e) => setStatusFilter(e.target.value)}
+          >
+            <option value="all">All Status</option>
+            <option value="Pending">Pending</option>
+            <option value="Dispatch On the Way">Dispatch On the Way</option>
+            <option value="Resolved">Resolved</option>
+            <option value="Cancelled">Cancelled</option>
+          </select>
+          
+          <select 
+            className="filter-select"
+            value={typeFilter} 
+            onChange={(e) => setTypeFilter(e.target.value)}
+          >
+            <option value="all">All Types</option>
+            <option value="Electrical Fire">Electrical Fire</option>
+            <option value="Medical Emergency">Medical Emergency</option>
+            <option value="Structural Fire">Structural Fire</option>
+            <option value="Vehicle Accident">Vehicle Accident</option>
+            <option value="Other">Other</option>
+          </select>
         </div>
       </div>
 

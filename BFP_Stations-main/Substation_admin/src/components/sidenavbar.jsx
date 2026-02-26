@@ -17,10 +17,16 @@ export default function Sidebar() {
       {/* Logo / Avatar */}
       <div className="station-name">Branch BFP</div>
 
+      <hr className="station-divider" />
+
       {/* MAIN NAVIGATION */}
       <nav className="nav">
         <NavLink to="/" className="nav-item">
           <i className="fa-solid fa-chart-line"></i> Dashboard
+        </NavLink>
+
+        <NavLink to="/substation/reports" className="nav-item">
+          <i className="fa-solid fa-inbox"></i> Reports
         </NavLink>
 
         <NavLink to="/officers" className="nav-item">

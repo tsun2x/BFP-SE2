@@ -39,13 +39,6 @@ export default function OfficerLogInHistory() {
           <input type="text" placeholder="Search Officer Name..." className="officer-search-input" />
         </div>
 
-        {/* SEARCH */}
-        <input
-          type="text"
-          placeholder="Search Officer Name..."
-          className="officer-search-input"
-        />
-
         {/* FILTERS */}
         <div className="officer-filters">
 

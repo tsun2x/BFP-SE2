@@ -1,3 +1,23 @@
+.toast-root {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 20000;
+}
+.toast-item {
+  background: rgba(0,0,0,0.8);
+  color: #fff;
+  padding: 8px 12px;
+  border-radius: 6px;
+  min-width: 160px;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+}
+.toast-item.success { background: #2d9a4a; }
+.toast-item.error { background: #c41e3a; }
+.toast-item.info { background: #2b6fb8; }
 /* Toast Notifications */
 .toast-container {
   position: fixed;

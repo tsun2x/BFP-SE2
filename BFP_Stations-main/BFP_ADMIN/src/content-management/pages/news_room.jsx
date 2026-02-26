@@ -1,7 +1,9 @@
-import React, { useEffect, useState, useRef } from 'react'
+import React, { useEffect, useState, useRef, useContext } from 'react'
 import { useNavigate } from 'react-router-dom'
 import '../style/content.css'
 import '../style/newsroom.css'
+import { supabase } from '../../utils/supabaseClient'
+import { AuthContext } from '../../context/AuthContext'
 
 function NewsRoom() {
   const navigate = useNavigate()
@@ -10,6 +12,9 @@ function NewsRoom() {
   const [items, setItems] = useState([])
   const [form, setForm] = useState({ id: null, title: '', description: '', author: '', date: '', image: '' })
   const fileRef = useRef(null)
+  const { user } = useContext(AuthContext)
+
+  console.log('[DEBUG] ContentManagement page user:', user);
 
   // default images for the three cards (place files in /public)
   const defaultImages = {
@@ -18,38 +23,46 @@ function NewsRoom() {
     3: '/news3.jpg',
   }
 
-  // load from localStorage or seed defaults
-  useEffect(() => {
+  // loadNews moved out of useEffect for reuse
+  const loadNews = async () => {
     try {
-      const saved = localStorage.getItem('newsItems')
-      if (saved) {
-        const parsed = JSON.parse(saved)
-        // ensure default images if any are missing, and force id=1 to use our provided image
-        const withImages = parsed.map((it) => ({
-          ...it,
-          image: it.id === 1 ? defaultImages[1] : (it.image || defaultImages[it.id] || it.image),
-        }))
-        setItems(withImages)
+      const { data, error } = await supabase
+        .from('news_room')
+        .select(`id, title, description, user_id, headline_image, additional_images, date, published, published_at, users:user_id (full_name, email)`)
+        .order('published_at', { ascending: false })
+
+      if (error) {
+        console.error('Failed to load news:', error)
         return
       }
-    } catch {}
-    setItems([
-      { id: 1, title: '“3-Alarm Fire Controlled in ZC”', date: 'October 03, 2025', image: defaultImages[1], description: '', author: '' },
-      { id: 2, title: '“Grass Fire Spreads Near Vacant Lot in San Pedro”', date: 'October 12, 2025', image: defaultImages[2], description: '', author: '' },
-      { id: 3, title: '“Kitchen Fire Contained in San Pedro Residence”', date: 'October 19, 2025', image: defaultImages[3], description: '', author: '' },
-    ])
-  }, [])
+
+      // Map DB fields to UI expected shape
+      const mapped = (data || []).map((r) => ({
+        id: r.id,
+        title: r.title,
+        description: r.description,
+        author: r.users?.full_name || '',
+        date: r.published_at ? new Date(r.published_at).toLocaleDateString('en-US', { month: 'long', day: '2-digit', year: 'numeric' }) : (r.date ? new Date(r.date).toLocaleDateString() : ''),
+        image: r.headline_image || defaultImages[r.id] || '',
+        additionalImages: r.additional_images || []
+      }))
+
+      setItems(mapped)
+    } catch (e) {
+      console.error('Error loading news:', e)
+    }
+  }
 
   useEffect(() => {
-    try { localStorage.setItem('newsItems', JSON.stringify(items)) } catch {}
-  }, [items])
+    loadNews()
+  }, [])
 
   const openCreate = () => {
-    setForm({ id: null, title: '', description: '', author: '', date: new Date().toLocaleDateString('en-US', { month: 'long', day: '2-digit', year: 'numeric' }), image: '' })
+    setForm({ id: null, title: '', description: '', date: new Date().toLocaleDateString('en-US', { month: 'long', day: '2-digit', year: 'numeric' }), image: '' })
     setShowNewsModal(true)
   }
   const openEdit = (n) => {
-    setForm({ id: n.id, title: n.title, description: n.description || '', author: n.author || '', date: n.date || '', image: n.image || '' })
+    setForm({ id: n.id, title: n.title, description: n.description || '', date: n.date || '', image: n.image || '' })
     setShowNewsModal(true)
   }
   const onFile = (e) => {
@@ -67,23 +80,90 @@ function NewsRoom() {
     reader.onload = () => setForm((prev) => ({ ...prev, image: reader.result }))
     reader.readAsDataURL(f)
   }
-  const saveNews = (e) => {
-    e.preventDefault()
+  // helper to convert dataURL to Blob
+  const dataURLtoBlob = (dataurl) => {
+    const arr = dataurl.split(',')
+    const mime = arr[0].match(/:(.*?);/)[1]
+    const bstr = atob(arr[1])
+    let n = bstr.length
+    const u8arr = new Uint8Array(n)
+    while (n--) u8arr[n] = bstr.charCodeAt(n)
+    return new Blob([u8arr], { type: mime })
+  }
+
+  const saveNews = async (e) => {
+    if (e) e.preventDefault();
     if (!form.title.trim()) return
-    setItems((prev) => {
-      if (form.id) {
-        return prev.map((it) => (it.id === form.id ? { ...it, ...form } : it))
+
+    try {
+      // upload headline image if present (data URL)
+      let headlineUrl = form.image || null
+      if (form.image && form.image.startsWith('data:')) {
+        const blob = dataURLtoBlob(form.image)
+        const filename = `news/${Date.now()}_${Math.random().toString(36).slice(2,9)}.jpg`
+        const { error: uploadErr } = await supabase.storage.from('news-images').upload(filename, blob, { upsert: true })
+        if (uploadErr) throw uploadErr
+        const { data: publicUrlData } = supabase.storage.from('news-images').getPublicUrl(filename)
+        headlineUrl = publicUrlData.publicUrl
       }
-      const nextId = prev.length ? Math.max(...prev.map((p) => p.id)) + 1 : 1
-      return [...prev, { ...form, id: nextId }]
-    })
-    setShowNewsModal(false)
+
+      // prepare additional images array (if any) - currently UI doesn't collect them, keep empty
+      const additionalImages = form.additionalImages || []
+
+      // Defensive user_id lookup
+      const user_id = user?.id ?? user?.user_id ?? user?.uuid ?? null;
+      console.log('[DEBUG] Attempting to insert news with user_id:', user_id);
+      if (!user_id) {
+        alert('You must be logged in to post news.');
+        return;
+      }
+      const payload = {
+        title: form.title,
+        description: form.description,
+        user_id,
+        headline_image: headlineUrl,
+        additional_images: additionalImages,
+        published: true,
+        published_at: new Date().toISOString(),
+        date: new Date().toISOString(),
+        slug: form.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''),
+        metadata: {},
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }
+
+      const { data, error } = await supabase.from('news_room').insert([payload]).select('*')
+      if (error) {
+        console.error('[DEBUG] Insert failed:', error);
+        alert('Failed to save news. See console for details. Error: ' + (error.message || error.toString()));
+        // Extra debug: show payload and error
+        console.log('[DEBUG] Payload attempted:', payload);
+        return;
+      }
+      if (!data) {
+        console.error('[DEBUG] Insert returned no data, possible RLS, FK, or DB error.');
+        alert('Insert did not return data. Check RLS, foreign key, and DB.');
+        // Extra debug: show payload
+        console.log('[DEBUG] Payload attempted:', payload);
+        return;
+      }
+      console.log('[DEBUG] Insert success:', data);
+      alert('News inserted successfully!');
+      setShowNewsModal(false);
+      setForm({ id: null, title: '', description: '', date: '', image: '' });
+      // reload from DB
+      await loadNews();
+    } catch (err) {
+      console.error('Failed to save news:', err)
+      alert('Failed to save news. See console for details.')
+    }
   }
   const filtered = items.filter((n) => {
     const q = search.toLowerCase()
     if (!q) return true
     return [n.title, n.description, n.author, n.date].some((v) => (v || '').toLowerCase().includes(q))
   })
+  
 
   return (
     <div className="cm-wrapper">
@@ -96,7 +176,7 @@ function NewsRoom() {
       <div className="cm-card">
         <div className="nr-list-head">
           <div className="nr-list-title">
-            <h2>News Room</h2>
+            <h2>News awdawdawdRoom</h2>
             <p>For posting general articles, announcements, and updates from BFP</p>
           </div>
         </div>
@@ -126,15 +206,11 @@ function NewsRoom() {
         <div className="nr-modal-overlay" role="dialog" aria-modal="true">
           <div className="nr-modal">
             <div className="nr-modal-header">
-              <button className="nr-back" onClick={() => setShowNewsModal(false)}>
-                <i className="fa-solid fa-arrow-left"></i>
-                <span>Back</span>
-              </button>
               <h2 className="nr-title">News Room CMS</h2>
               <div className="nr-spacer" />
             </div>
             <div className="nr-sheet">
-              <form className="nr-form" onSubmit={saveNews}>
+              <form className="nr-form">
                 <div className="nr-field">
                   <label htmlFor="headline-file">Headline Photo <span className="nr-help">Main image for the article</span></label>
                   <div
@@ -160,10 +236,10 @@ function NewsRoom() {
                 </div>
                 <div className="nr-field"><label>Headline or Title</label><input className="nr-input" placeholder="Value" value={form.title} onChange={(e)=>setForm({...form, title:e.target.value})} /></div>
                 <div className="nr-field"><label>Description</label><textarea className="nr-input" rows="3" placeholder="Value" value={form.description} onChange={(e)=>setForm({...form, description:e.target.value})} /></div>
-                <div className="nr-field"><label>Author</label><input className="nr-input nr-input--sm" placeholder="Value" value={form.author} onChange={(e)=>setForm({...form, author:e.target.value})} /></div>
+                {/* Author field removed, author is now inferred from logged-in user */}
                 <div className="nr-field"><label>Additional Photos <span className="nr-help">optional extra images for more content</span></label><div className="nr-dropzone nr-dropzone--sm"><span className="nr-drop-icon" /></div></div>
                 <div className="nr-actions">
-                  <button type="submit" className="nr-post">
+                  <button type="button" className="nr-post" onClick={saveNews}>
                     <i className="fa-solid fa-paper-plane"></i>
                     <span>{form.id ? 'Update News' : 'Post News'}</span>
                   </button>

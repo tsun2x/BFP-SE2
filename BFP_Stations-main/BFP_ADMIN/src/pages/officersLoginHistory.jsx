@@ -34,13 +34,10 @@ export default function OfficerLogInHistory() {
 
       {/* SEARCH + FILTERS */}
       <div className="officer-search-card">
-<<<<<<< Updated upstream
-=======
         <div className="search-input-wrapper">
           <i className="fa-solid fa-search search-icon"></i>
           <input type="text" placeholder="Search Officer Name..." className="officer-search-input" />
         </div>
->>>>>>> Stashed changes
 
         {/* SEARCH */}
         <input

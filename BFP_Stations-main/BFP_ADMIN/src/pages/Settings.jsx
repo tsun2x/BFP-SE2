@@ -1,13 +1,23 @@
 import { useState, useContext, useEffect } from "react";
 import { AuthContext } from "../context/AuthContext";
+import apiClient from "../utils/apiClient";
+import { useToast } from "../components/Toast";
 import "../style/settings.css";
 import ConfirmModal from "../components/ConfirmModal";
 
 export default function Settings() {
-  const { user } = useContext(AuthContext);
+  const { user, logout } = useContext(AuthContext);
   const [activeTab, setActiveTab] = useState("profile");
   const [geoLoading, setGeoLoading] = useState(false);
   const [stationSaved, setStationSaved] = useState(false);
+  const toast = useToast();
+  const [isLoadingStations, setIsLoadingStations] = useState(false);
+  const [isSavingStation, setIsSavingStation] = useState(false);
+  const [isDeletingStation, setIsDeletingStation] = useState(false);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [profileErrors, setProfileErrors] = useState({});
+  const [stationErrors, setStationErrors] = useState({});
   const [notifications, setNotifications] = useState({
     emailAlerts: true,
     smsAlerts: false,
@@ -52,6 +62,89 @@ export default function Settings() {
     loginNotifications: true,
   });
 
+  // Load user data on mount
+  useEffect(() => {
+    if (user) {
+      const fullName = user.full_name || user.fullName || user.name || ""
+      const nameParts = typeof fullName === 'string' ? fullName.trim().split(/\s+/).filter(Boolean) : []
+      const derivedFirstName = nameParts.length ? nameParts[0] : ""
+      const derivedLastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : ""
+
+      setProfile((prev) => ({
+        ...prev,
+        firstName: user.first_name || user.firstName || derivedFirstName || prev.firstName,
+        lastName: user.last_name || user.lastName || derivedLastName || prev.lastName,
+        email: user.email || prev.email,
+        phone: user.phone_number || user.phone || prev.phone,
+        station: user.station_name || user.stationInfo?.station_name || user.substation || user.station || prev.station,
+        badgeNumber: user.id_number || user.idNumber || prev.badgeNumber,
+        rank: user.rank || prev.rank || "Fire Officer 1",
+      }));
+      
+      // Load assigned station info if available
+      if (user.stationInfo) {
+        setStationSettings({
+          stationName: user.stationInfo.station_name || "",
+          latitude: user.stationInfo.latitude || "",
+          longitude: user.stationInfo.longitude || "",
+          contactNumber: user.stationInfo.contact_number || "",
+          stationType: user.stationInfo.station_type || "Substation",
+        });
+      }
+    }
+  }, [user]);
+
+  useEffect(() => {
+    // Hydrate from cached full profile (separate from AuthContext user/localStorage.user)
+    try {
+      const cached = JSON.parse(localStorage.getItem('meProfile') || 'null')
+      if (cached) {
+        setProfile((prev) => ({
+          ...prev,
+          firstName: cached.first_name || cached.firstName || prev.firstName,
+          lastName: cached.last_name || cached.lastName || prev.lastName,
+          email: cached.email || prev.email,
+          phone: cached.phone_number || cached.phone || prev.phone,
+          station: cached.station_name || cached.substation || cached.station || prev.station,
+          badgeNumber: cached.id_number || cached.idNumber || prev.badgeNumber,
+          rank: cached.rank || prev.rank
+        }))
+      }
+    } catch (e) {}
+
+    const hydrateMe = async () => {
+      try {
+        const data = await apiClient.get('/me')
+        const me = data?.user || data
+        if (!me) return
+
+        setProfile((prev) => ({
+          ...prev,
+          firstName: me.first_name || me.firstName || prev.firstName,
+          lastName: me.last_name || me.lastName || prev.lastName,
+          email: me.email || prev.email,
+          phone: me.phone_number || me.phone || prev.phone,
+          station: me.station_name || me.substation || me.station || prev.station,
+          badgeNumber: me.id_number || me.idNumber || prev.badgeNumber,
+          rank: me.rank || prev.rank
+        }))
+
+        try {
+          const stored = JSON.parse(localStorage.getItem('user') || '{}')
+          localStorage.setItem('user', JSON.stringify({ ...stored, ...me }))
+        } catch (e) {}
+
+        try {
+          localStorage.setItem('meProfile', JSON.stringify(me))
+        } catch (e) {}
+      } catch (err) {
+        console.error('Failed to hydrate /me:', err)
+      }
+    }
+
+    hydrateMe()
+  }, [])
+
   const handleNotificationChange = (key) => {
     setNotifications(prev => ({ ...prev, [key]: !prev[key] }));
   };
@@ -83,12 +176,12 @@ export default function Settings() {
         },
         (error) => {
           console.error("Geolocation error:", error);
-          alert("Unable to get your location. Please check browser permissions.");
+            toast.error("Unable to get your location. Please check browser permissions.");
           setGeoLoading(false);
         }
       );
     } else {
-      alert("Geolocation is not supported by your browser.");
+        toast.error("Geolocation is not supported by your browser.");
       setGeoLoading(false);
     }
   };
@@ -98,52 +191,52 @@ export default function Settings() {
   };
 
   const handleSaveStationSettings = async () => {
-    try {
-      const token = localStorage.getItem("authToken");
-      const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+    // basic client-side validation
+    setStationErrors({});
+    if (!stationSettings.stationName || stationSettings.stationName.trim() === "") {
+      setStationErrors({ stationName: "Station name is required" });
+      toast.error("Station name is required");
+      return;
+    }
 
-      // If the current user is admin (can create/update any station), use admin endpoints
-      if (user?.role === 'admin') {
+    const lat = stationSettings.latitude !== '' ? parseFloat(stationSettings.latitude) : null;
+    const lng = stationSettings.longitude !== '' ? parseFloat(stationSettings.longitude) : null;
+    if (lat !== null && (isNaN(lat) || lat < -90 || lat > 90)) {
+      setStationErrors({ latitude: "Latitude must be between -90 and 90" });
+      toast.error("Latitude must be between -90 and 90");
+      return;
+    }
+    if (lng !== null && (isNaN(lng) || lng < -180 || lng > 180)) {
+      setStationErrors({ longitude: "Longitude must be between -180 and 180" });
+      toast.error("Longitude must be between -180 and 180");
+      return;
+    }
+
+    setIsSavingStation(true);
+    try {
+      toast.info("Saving station...");
+      // If the current user is admin (can create/update any station)
+      if (user?.role === "admin") {
         if (editingStationId) {
-          // Update station
-          const response = await fetch(`${apiUrl}/firestations/${editingStationId}`, {
-            method: 'PUT',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token}`
-            },
-            body: JSON.stringify({
-              stationName: stationSettings.stationName,
-              contactNumber: stationSettings.contactNumber || null,
-              latitude: stationSettings.latitude !== '' ? parseFloat(stationSettings.latitude) : undefined,
-              longitude: stationSettings.longitude !== '' ? parseFloat(stationSettings.longitude) : undefined,
-            })
+          await apiClient.put(`/firestations/${editingStationId}`, {
+            stationName: stationSettings.stationName,
+            contactNumber: stationSettings.contactNumber || null,
+            latitude: lat,
+            longitude: lng,
           });
-          const data = await response.json();
-          if (!response.ok) throw new Error(data.message || 'Failed to update station');
-          alert('Station updated');
+          toast.success("Station updated successfully");
         } else {
-          // Create station
-          const response = await fetch(`${apiUrl}/firestations`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token}`
-            },
-            body: JSON.stringify({
-              stationName: stationSettings.stationName,
-              contactNumber: stationSettings.contactNumber || null,
-              latitude: stationSettings.latitude !== '' ? parseFloat(stationSettings.latitude) : null,
-              longitude: stationSettings.longitude !== '' ? parseFloat(stationSettings.longitude) : null,
-              stationType: stationSettings.stationType || 'Substation'
-            })
+          await apiClient.post(`/firestations`, {
+            stationName: stationSettings.stationName,
+            contactNumber: stationSettings.contactNumber || null,
+            latitude: lat,
+            longitude: lng,
+            stationType: stationSettings.stationType || "Substation",
           });
-          const data = await response.json();
-          if (!response.ok) throw new Error(data.message || 'Failed to create station');
-          alert('Station created');
+          toast.success("Station created successfully");
         }
 
-        // Refresh station list after create/update
+        setShowFormModal(false);
         await fetchStations();
         setEditingStationId(null);
         setStationSaved(true);
@@ -151,51 +244,35 @@ export default function Settings() {
         return;
       }
 
-      // Otherwise, fallback to updating assigned station for non-admin users
-      const response = await fetch(`${apiUrl}/update-station`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          stationName: stationSettings.stationName,
-          latitude: parseFloat(stationSettings.latitude),
-          longitude: parseFloat(stationSettings.longitude),
-          contactNumber: stationSettings.contactNumber
-        })
+      // Non-admin: update assigned station
+      await apiClient.put(`/update-station`, {
+        stationName: stationSettings.stationName,
+        latitude: lat,
+        longitude: lng,
+        contactNumber: stationSettings.contactNumber || null,
       });
-
-      const data = await response.json();
-      if (response.ok) {
-        setStationSaved(true);
-        setTimeout(() => setStationSaved(false), 3000);
-        alert("Station settings updated successfully!");
-      } else {
-        alert(data.message || "Failed to update station settings");
-      }
+      setShowFormModal(false);
+      setStationSaved(true);
+      setTimeout(() => setStationSaved(false), 3000);
+      toast.success("Station settings updated successfully");
     } catch (error) {
-      console.error("Error saving station settings:", error);
-      alert("Error saving station settings: " + error.message);
+      toast.error(`Error: ${error.message || "Failed to save station"}`);
+    } finally {
+      setIsSavingStation(false);
     }
   };
 
   const fetchStations = async () => {
+    setIsLoadingStations(true);
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
-      console.log('Fetching stations from:', `${apiUrl}/firestations`);
-      const res = await fetch(`${apiUrl}/firestations`);
-      console.log('Response status:', res.status, 'ok:', res.ok);
-      if (res.ok) {
-        const data = await res.json();
-        console.log('Fetched stations:', data.stations);
-        setStations(data.stations || []);
-      } else {
-        const errData = await res.json();
-        console.error('API error response:', errData);
-      }
+      const data = await apiClient.get("/firestations");
+      // backend might return { stations: [...] } or { data: [...] } or array directly
+      const stationList = Array.isArray(data) ? data : (data.stations || data.firestations || data.data || []);
+      setStations(stationList);
     } catch (err) {
-      console.error('Failed to fetch stations', err);
+      toast.error(`Failed to load stations: ${err.message}`);
+    } finally {
+      setIsLoadingStations(false);
     }
   };
 
@@ -205,23 +282,21 @@ export default function Settings() {
 
   const handleEditClick = async (id) => {
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
-      const res = await fetch(`${apiUrl}/firestations/${id}`);
-      if (!res.ok) throw new Error('Failed to load station');
-      const data = await res.json();
+      const data = await apiClient.get(`/firestations/${id}`);
+      const s = data.station || data;
       setStationSettings({
-        stationName: data.station.station_name || '',
-        contactNumber: data.station.contact_number || '',
-        latitude: data.station.latitude || '',
-        longitude: data.station.longitude || '',
-        stationType: data.station.station_type || 'Substation'
+        stationName: s.station_name || "",
+        contactNumber: s.contact_number || "",
+        latitude: s.latitude || "",
+        longitude: s.longitude || "",
+        stationType: s.station_type || "Substation",
       });
       setEditingStationId(id);
       // show the edit form in a modal instead of the right-side panel
       setShowFormModal(true);
     } catch (err) {
       console.error(err);
-      alert('Unable to load station details');
+      toast.error('Unable to load station details');
     }
   };
 
@@ -231,53 +306,22 @@ export default function Settings() {
   };
 
   const handleConfirmDelete = async () => {
+    setIsDeletingStation(true);
     try {
-      const token = localStorage.getItem('authToken');
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-      
-      console.log('[Delete] Token:', token ? 'exists' : 'missing');
-      console.log('[Delete] API URL:', apiUrl);
-      console.log('[Delete] Password entered:', deletePassword ? 'yes' : 'no');
-      
-      // Verify password before deletion
-      let verifyRes;
-      try {
-        verifyRes = await fetch(`${apiUrl}/verify-password`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify({ password: deletePassword })
-        });
-      } catch (fetchErr) {
-        console.error('[Delete] Fetch error:', fetchErr);
-        throw new Error(`Failed to verify password: ${fetchErr.message}`);
-      }
-      
-      console.log('[Delete] Verify response status:', verifyRes.status);
-      const verifyData = await verifyRes.json();
-      console.log('[Delete] Verify response:', verifyData);
-      
-      if (!verifyRes.ok) {
-        alert('Incorrect password');
-        return;
-      }
-      
-      // Proceed with deletion
-      const res = await fetch(`${apiUrl}/firestations/${deleteModalStationId}`, {
-        method: 'DELETE',
-        headers: token ? { Authorization: `Bearer ${token}` } : {}
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || 'Failed to delete station');
-      alert('Station deleted');
+      // Verify password
+      await apiClient.post('/verify-password', { password: deletePassword });
+
+      // Delete
+      await apiClient.delete(`/firestations/${deleteModalStationId}`);
+      toast.success('Station deleted');
       await fetchStations();
       setDeleteModalStationId(null);
       setDeletePassword('');
     } catch (err) {
       console.error('Delete station error:', err);
-      alert('Unable to delete station: ' + err.message);
+      toast.error(err.message || 'Unable to delete station');
+    } finally {
+      setIsDeletingStation(false);
     }
   };
 
@@ -285,6 +329,67 @@ export default function Settings() {
     setStationSettings({ stationName: '', contactNumber: '', latitude: '', longitude: '', stationType: 'Substation' });
     setEditingStationId(null);
     setShowFormModal(true);
+  };
+
+  const handleSaveProfile = async () => {
+    setProfileErrors({});
+    if (!profile.firstName || !profile.lastName) {
+      setProfileErrors({ name: 'First and last name are required' });
+      toast.error('First and last name are required');
+      return;
+    }
+    if (profile.email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(profile.email)) {
+      setProfileErrors({ email: 'Invalid email' });
+      toast.error('Invalid email address');
+      return;
+    }
+
+    setIsSavingProfile(true);
+    try {
+      const payload = {
+        first_name: profile.firstName,
+        last_name: profile.lastName,
+        email: profile.email,
+        phone: profile.phone,
+        station: profile.station,
+        badge_number: profile.badgeNumber,
+        rank: profile.rank,
+      };
+      await apiClient.put('/me', payload);
+      toast.success('Profile updated');
+      try {
+        const stored = JSON.parse(localStorage.getItem('user') || '{}');
+        const updated = { ...stored, ...payload };
+        localStorage.setItem('user', JSON.stringify(updated));
+      } catch (e) {}
+    } catch (err) {
+      console.error('Profile save error', err);
+      toast.error(err.message || 'Failed to save profile');
+    } finally {
+      setIsSavingProfile(false);
+    }
+  };
+
+  const handleChangePassword = async () => {
+    const current = window.prompt('Enter current password:');
+    if (!current) return;
+    const newPass = window.prompt('Enter new password (min 8 chars):');
+    if (!newPass) return;
+    if (newPass.length < 8) {
+      toast.error('New password must be at least 8 characters');
+      return;
+    }
+    setIsChangingPassword(true);
+    try {
+      await apiClient.post('/change-password', { currentPassword: current, newPassword: newPass });
+      toast.success('Password changed. Please login again.');
+      logout();
+    } catch (err) {
+      console.error('Change password error', err);
+      toast.error(err.message || 'Failed to change password');
+    } finally {
+      setIsChangingPassword(false);
+    }
   };
 
   const tabs = [
@@ -739,26 +844,32 @@ export default function Settings() {
                   </div>
 
                   <div style={{ marginTop: '12px' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                      {stations.map(s => (
-                        <div key={s.station_id} style={{ border: '1px solid #eee', borderRadius: 8, padding: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#fff' }}>
-                          <div>
-                            <div style={{ fontWeight: 600 }}>{s.station_name}</div>
-                            <div style={{ color: '#555', marginTop: 6 }}>
-                              <strong>Contact:</strong> {s.contact_number || s.contactNumber || '-'}
+                    {isLoadingStations ? (
+                      <div style={{ padding: '20px', textAlign: 'center', color: '#666' }}>Loading stations...</div>
+                    ) : stations.length === 0 ? (
+                      <div style={{ padding: '20px', textAlign: 'center', color: '#999' }}>No stations found. Create one to get started.</div>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                        {stations.map(s => (
+                          <div key={s.station_id} style={{ border: '1px solid #eee', borderRadius: 8, padding: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#fff' }}>
+                            <div>
+                              <div style={{ fontWeight: 600 }}>{s.station_name}</div>
+                              <div style={{ color: '#555', marginTop: 6 }}>
+                                <strong>Contact:</strong> {s.contact_number || s.contactNumber || '-'}
+                              </div>
+                              <div style={{ color: '#666', marginTop: 6, fontSize: 13 }}>
+                                <span style={{ marginRight: 12 }}><strong>Lat:</strong> {s.latitude}</span>
+                                <span><strong>Lng:</strong> {s.longitude}</span>
+                              </div>
                             </div>
-                            <div style={{ color: '#666', marginTop: 6, fontSize: 13 }}>
-                              <span style={{ marginRight: 12 }}><strong>Lat:</strong> {s.latitude}</span>
-                              <span><strong>Lng:</strong> {s.longitude}</span>
+                            <div style={{ display: 'flex', gap: 8 }}>
+                              <button className="btn btn-danger" onClick={() => handleDeleteClick(s.station_id)} disabled={isDeletingStation}>Del</button>
+                              <button className="btn btn-outline" onClick={() => handleEditClick(s.station_id)} disabled={isLoadingStations}>Edit</button>
                             </div>
                           </div>
-                          <div style={{ display: 'flex', gap: 8 }}>
-                            <button className="btn btn-danger" onClick={() => handleDeleteClick(s.station_id)}>Del</button>
-                            <button className="btn btn-outline" onClick={() => handleEditClick(s.station_id)}>Edit</button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   {/* Modal for create/edit form */}
                   {showFormModal && (
@@ -792,8 +903,8 @@ export default function Settings() {
                             </select>
                           </div>
                           <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 12 }}>
-                            <button className="btn btn-outline" onClick={() => { setShowFormModal(false); setEditingStationId(null); }}>Cancel</button>
-                            <button className="btn btn-primary" onClick={async () => { await handleSaveStationSettings(); setShowFormModal(false); setEditingStationId(null); }}> {editingStationId ? 'Update Station' : 'Create Station'}</button>
+                            <button className="btn btn-outline" onClick={() => { setShowFormModal(false); setEditingStationId(null); }} disabled={isSavingStation}>Cancel</button>
+                            <button className="btn btn-primary" onClick={handleSaveStationSettings} disabled={isSavingStation}>{isSavingStation ? 'Saving...' : (editingStationId ? 'Update Station' : 'Create Station')}</button>
                           </div>
                         </div>
                       </div>

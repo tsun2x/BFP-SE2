@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react'
 import '../style/content.css'
 import '../style/newsroom.css'
+
+// Fix: Ensure modal styles are loaded
 import '../style/modals.css'
+
 
 function ContentManagement() {
   const [openSections, setOpenSections] = useState({ electrical: true, kitchen: false })
@@ -595,7 +598,7 @@ function ContentManagement() {
           <>
             <div className="nr-list-head">
               <div className="nr-list-title">
-                <h2>News Room</h2>
+                <h2>Newsawdawdaw Room</h2>
                 <p>For posting general articles, announcements, and updates from BFP</p>
               </div>
             </div>
@@ -661,7 +664,7 @@ function ContentManagement() {
     
     {/* Confirmation Modal */}
     {confirmModal.open && (
-      <div className="confirm-modal-backdrop" onClick={confirmModal.onCancel}>
+      <div className="l-backdrop" onClick={confirmModal.onCancel}>
         <div className="confirm-modal" onClick={(e) => e.stopPropagation()}>
           <div className="confirm-modal-icon">
             {confirmModal.type === 'delete' ? (

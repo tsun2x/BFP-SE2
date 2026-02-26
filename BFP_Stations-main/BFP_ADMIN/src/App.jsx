@@ -15,14 +15,15 @@ import Officers from "./pages/officersLoginHistory";
 import IncidentReport from "./pages/IncidentReport";
 import BranchStatus from "./pages/branchstatus";
 import StationReadiness from "./pages/stationreadiness";
-import ContentManagement from "./pages/ContentManagement";
 import Settings from "./pages/Settings";
 import TestPage from "./pages/TestPage";
+import ContentManagement from "./pages/ContentManagement";
 
 import { StatusProvider } from "./context/StatusContext";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { CallProvider, CallContext } from "./context/CallContext";
 import { NotificationProvider, useNotifications } from "./context/NotificationContext";
+import { ToastProvider } from "./context/ToastContext";
 import { ToastContainer, useToast } from "./components/Toast";
 
 import CallModal from "./components/CallModal";
@@ -286,6 +287,9 @@ function AppContent() {
     voiceConsoleOpen &&
     !voiceConsoleMinimized;
 
+  // Show logged-in user in console for debug
+ // console.log('[DEBUG] AppContent user:', user);
+
   return (
     <>
       {hideLayout ? (
@@ -312,8 +316,11 @@ function AppContent() {
                 <Route path="/incident-report" element={<ProtectedRoute><IncidentReport /></ProtectedRoute>} />
                 <Route path="/branch-status" element={<ProtectedRoute><BranchStatus /></ProtectedRoute>} />
                 <Route path="/station-readiness" element={<ProtectedRoute><StationReadiness /></ProtectedRoute>} />
-                <Route path="/content-management" element={<ProtectedRoute><ContentManagement /></ProtectedRoute>} />
+             { /*<Route path="/newsroom" element={<ProtectedRoute><NewsRoom /></ProtectedRoute>} />
+                <Route path="/emergency-contact" element={<ProtectedRoute><EmergencyContact /></ProtectedRoute>} />   */}
+              <Route path="/content-management" element={<ProtectedRoute><ContentManagement /></ProtectedRoute>} />
                 <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+                
                 <Route path="/test" element={<ProtectedRoute><TestPage /></ProtectedRoute>} />
               </Routes>
 
@@ -435,9 +442,11 @@ export default function App() {
       <CallProvider>
         <StatusProvider>
           <NotificationProvider>
-            <BrowserRouter>
-              <AppContent />
-            </BrowserRouter>
+            <ToastProvider>
+              <BrowserRouter>
+                <AppContent />
+              </BrowserRouter>
+            </ToastProvider>
           </NotificationProvider>
         </StatusProvider>
       </CallProvider>

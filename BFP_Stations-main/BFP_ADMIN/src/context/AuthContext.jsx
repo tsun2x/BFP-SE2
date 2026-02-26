@@ -20,6 +20,14 @@ export function AuthProvider({ children }) {
     const token = localStorage.getItem("authToken");
     const storedUser = localStorage.getItem("user");
 
+    // Optimistically restore stored user immediately so refresh doesn't blank the UI
+    if (storedUser) {
+      try {
+        setUser(JSON.parse(storedUser));
+        setIsAuthenticated(Boolean(token));
+      } catch (e) {}
+    }
+
     if (token) {
       // Verify token with the backend /me endpoint which requires a valid JWT
       verifyToken(token)
@@ -31,37 +39,16 @@ export function AuthProvider({ children }) {
             try {
               localStorage.setItem("user", JSON.stringify(userData));
             } catch (e) {}
-          } else {
-            // Invalid token -> clear and force login
-            localStorage.removeItem("authToken");
-            localStorage.removeItem("user");
-            setUser(null);
-            setIsAuthenticated(false);
           }
         })
         .catch((error) => {
           console.error("Error verifying token (network?):", error);
-          // Treat network errors as transient: if we have a stored user, restore it optimistically
-          if (storedUser) {
-            try {
-              setUser(JSON.parse(storedUser));
-              setIsAuthenticated(true);
-            } catch (e) {
-              localStorage.removeItem("authToken");
-              localStorage.removeItem("user");
-              setUser(null);
-              setIsAuthenticated(false);
-            }
-          } else {
-            // No stored user -> clear token to be safe
-            localStorage.removeItem("authToken");
-            localStorage.removeItem("user");
-            setUser(null);
-            setIsAuthenticated(false);
-          }
+          // Treat errors as transient; keep stored session. Only explicit 401 should log the user out.
         })
         .finally(() => setIsLoading(false));
     } else {
+      // No token means not authenticated.
+      setIsAuthenticated(false);
       setIsLoading(false);
     }
   }, []);
@@ -78,15 +65,25 @@ export function AuthProvider({ children }) {
         },
       });
 
-      if (response.status === 401) return false;
-      if (!response.ok) return false;
+      if (response.status === 401) {
+        // Explicitly invalid/expired token -> clear session
+        localStorage.removeItem("authToken");
+        localStorage.removeItem("user");
+        setUser(null);
+        setIsAuthenticated(false);
+        return false;
+      }
+      if (!response.ok) {
+        // Don't force logout on transient server errors (e.g. 500, 404, CORS issues)
+        throw new Error(`Token verification failed: ${response.status}`);
+      }
 
       const data = await response.json();
       // Expecting { user: { ... } }
       return data?.user || false;
     } catch (error) {
       console.error("Token verification error:", error);
-      return false;
+      throw error;
     }
   };
 

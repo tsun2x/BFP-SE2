@@ -1,5 +1,5 @@
 import express from 'express';
-import { supabase, db } from '../config/supabase.js';
+import { supabase, db } from '../../BFP_Stations-main/BFP_ADMIN/backend/config/supabase.js';
 
 const router = express.Router();
 

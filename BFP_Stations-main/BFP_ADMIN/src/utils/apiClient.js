@@ -19,7 +19,7 @@ export const apiCall = async (endpoint, options = {}) => {
     ...options.headers,
   };
 
-  if (token) {
+  if (token && !headers["Authorization"] && !headers["authorization"]) {
     headers["Authorization"] = `Bearer ${token}`;
   }
 
@@ -36,7 +36,21 @@ export const apiCall = async (endpoint, options = {}) => {
       window.location.href = "/login";
     }
 
-    const data = await response.json();
+    const contentType = response.headers.get('content-type') || '';
+    let data;
+
+    if (contentType.includes('application/json')) {
+      data = await response.json();
+    } else {
+      // Non-JSON response (HTML or plain text) - capture text for debugging
+      const text = await response.text();
+      // If response is not OK, throw with the returned text to make debugging easier
+      if (!response.ok) {
+        throw new Error(text || `API error: ${response.status}`);
+      }
+      // If OK but non-JSON, return raw text wrapped in an object
+      return { success: true, data: text };
+    }
 
     if (!response.ok) {
       throw new Error(data.message || `API error: ${response.status}`);

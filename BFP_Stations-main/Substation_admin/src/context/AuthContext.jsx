@@ -1,4 +1,5 @@
 import { createContext, useState, useEffect, useContext } from "react";
+import apiClient from "../utils/apiClient";
 
 export const AuthContext = createContext();
 
@@ -68,7 +69,10 @@ export function AuthProvider({ children }) {
       if (res.status === 401) return false;
       if (!res.ok) return false;
       const data = await res.json();
-      return data?.user || false;
+      const user = data?.user || false;
+      if (!user) return false;
+      if (String(user.role || '').toLowerCase() === 'admin') return false;
+      return user;
     } catch (error) {
       console.error('verifyToken error:', error);
       return false;
@@ -83,7 +87,7 @@ export function AuthProvider({ children }) {
     setIsLoading(true);
     try {
       const apiUrl = getApiUrl();
-      const response = await fetch(`${apiUrl}/login`, {
+      const response = await fetch(`${apiUrl}/substation-login`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -139,11 +143,27 @@ export function AuthProvider({ children }) {
     }
   };
 
-  const logout = () => {
+  const logout = async () => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const apiUrl = getApiUrl();
+      await fetch(`${apiUrl}/logout`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({}),
+        keepalive: true,
+      });
+    } catch (e) {
+      // ignore
+    }
     localStorage.removeItem("authToken");
     localStorage.removeItem("user");
     setUser(null);
     setIsAuthenticated(false);
+    window.location.replace("/login");
   };
 
   return (

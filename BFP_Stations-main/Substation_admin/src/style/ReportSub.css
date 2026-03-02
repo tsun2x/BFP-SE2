@@ -1,3 +1,5 @@
+@import './modals.css';
+
 :root{
   --bg: #f8fafc;
   --panel: #ffffff;
@@ -449,9 +451,6 @@
   transform: translateY(-1px);
 }
 
-/* Modal styles - using standardized modal system */
-@import './modals.css';
-
 /* Reports page specific modal overrides */
 .modal-message {
   margin-bottom: 40px !important;
@@ -473,6 +472,23 @@
   font-size: 48px;
   margin-bottom: 16px;
   display: block;
+}
+
+/* Composer form (Gmail-like) */
+.composer-form { display:flex; flex-direction:column; gap:12px; }
+.composer-fields { display:flex; gap:12px; align-items:center; }
+.composer-to { min-width: 220px; max-width: 380px; }
+.composer-subject { flex:1; }
+.composer-textarea { min-height: 220px; }
+.composer-toolbar { display:flex; justify-content:space-between; align-items:center; gap:12px; padding-top:8px; }
+.composer-left .btn { padding:8px 10px; border-radius:8px; }
+.composer-right { display:flex; gap:8px; align-items:center; }
+.composer-send { border-radius: 999px; padding: 10px 20px; }
+
+/* Small screens: stack fields */
+@media (max-width: 600px) {
+  .composer-fields { flex-direction: column; align-items: stretch; }
+  .composer-to { width: 100%; }
 }
 
 /* Keep layout desktop-first as requested */

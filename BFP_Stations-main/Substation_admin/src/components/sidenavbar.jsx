@@ -1,14 +1,18 @@
 import { NavLink, useNavigate } from "react-router-dom";
+import { useContext } from "react";
+import { AuthContext } from "../context/AuthContext";
 import "../style/navbar.css";
 
 export default function Sidebar() {
   const navigate = useNavigate();
+  const { logout } = useContext(AuthContext);
 
-  const handleLogout = () => {
-    // clear session (optional)
-    // localStorage.removeItem("user");
-
-    navigate("/login");
+  const handleLogout = async () => {
+    try {
+      await logout();
+    } catch (e) {
+      navigate("/login", { replace: true });
+    }
   };
 
   return (

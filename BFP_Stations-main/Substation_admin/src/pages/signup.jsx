@@ -66,7 +66,7 @@ export default function Signup() {
   const fetchStations = async () => {
     try {
       const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
-      const res = await fetch(`${apiUrl}/stations`);
+      const res = await fetch(`${apiUrl}/stations?stationType=Substation`);
       if (res.ok) {
         const data = await res.json();
         setStations(data.stations || []);

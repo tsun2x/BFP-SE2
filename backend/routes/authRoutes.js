@@ -64,6 +64,23 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ message: 'Invalid ID Number or password' });
     }
 
+    // Insert officer login history after successful login
+    if (user.user_id && user.assigned_station_id) {
+      const loginHistoryRecord = {
+        user_id: user.user_id,
+        station_id: user.assigned_station_id,
+        login_time: new Date().toISOString(),
+        status: 'Online'
+      };
+      console.log('[POST /login] Inserting login history:', loginHistoryRecord);
+      const { error: loginHistoryError } = await supabase
+        .from('officer_login_history')
+        .insert([loginHistoryRecord]);
+      if (loginHistoryError) {
+        console.error('[POST /login] officer_login_history insert error:', loginHistoryError.message);
+      }
+    }
+
     // Generate JWT token (include role)
     const token = jwt.sign(
       { 
@@ -114,6 +131,352 @@ router.post('/login', async (req, res) => {
   }
 });
 
+router.post('/substation-login', async (req, res) => {
+  try {
+    const { idNumber, password } = req.body;
+
+    if (!idNumber || !password) {
+      return res.status(400).json({
+        message: 'ID Number and password are required'
+      });
+    }
+
+    console.log('[POST /substation-login] Attempt login for idNumber:', idNumber);
+
+    const { data: rows, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('id_number', idNumber)
+      .single();
+
+    if (error) {
+      console.error('[POST /substation-login] Supabase error:', error);
+      return res.status(500).json({ message: 'Database error', error: error.message });
+    }
+
+    if (!rows) {
+      console.log('[POST /substation-login] No user found for idNumber:', idNumber);
+      return res.status(401).json({ message: 'Invalid ID Number or password' });
+    }
+
+    const user = rows;
+
+    if (String(user.role || '').toLowerCase() === 'admin') {
+      return res.status(403).json({ message: 'Admin accounts cannot login to the Substation app' });
+    }
+
+    let passwordMatch = false;
+    try {
+      passwordMatch = await bcrypt.compare(password, user.password);
+      console.log('[POST /substation-login] bcrypt.compare result:', passwordMatch);
+    } catch (err) {
+      console.error('[POST /substation-login] bcrypt error:', err.message);
+      if (password === user.password) {
+        console.log('[POST /substation-login] Plain text match succeeded');
+        passwordMatch = true;
+      }
+    }
+
+    if (!passwordMatch) {
+      return res.status(401).json({ message: 'Invalid ID Number or password' });
+    }
+
+    if (user.user_id && user.assigned_station_id) {
+      const loginHistoryRecord = {
+        user_id: user.user_id,
+        station_id: user.assigned_station_id,
+        login_time: new Date().toISOString(),
+        status: 'Online'
+      };
+      console.log('[POST /substation-login] Inserting login history:', loginHistoryRecord);
+      const { error: loginHistoryError } = await supabase
+        .from('officer_login_history')
+        .insert([loginHistoryRecord]);
+      if (loginHistoryError) {
+        console.error('[POST /substation-login] officer_login_history insert error:', loginHistoryError.message);
+      }
+    }
+
+    const token = jwt.sign(
+      {
+        id: user.user_id,
+        idNumber: user.id_number,
+        name: `${user.first_name} ${user.last_name}`,
+        substation: user.substation,
+        assignedStationId: user.assigned_station_id,
+        role: user.role
+      },
+      JWT_SECRET,
+      { expiresIn: '24h' }
+    );
+
+    let stationInfo = null;
+    if (user.assigned_station_id) {
+      const { data: stations } = await supabase
+        .from('fire_stations')
+        .select('*')
+        .eq('station_id', user.assigned_station_id)
+        .single();
+      stationInfo = stations || null;
+    }
+
+    return res.json({
+      token,
+      user: {
+        id: user.user_id,
+        idNumber: user.id_number,
+        name: `${user.first_name} ${user.last_name}`,
+        firstName: user.first_name,
+        lastName: user.last_name,
+        rank: user.rank,
+        substation: user.substation,
+        assignedStationId: user.assigned_station_id,
+        stationInfo: stationInfo,
+        role: user.role,
+        assigned: !!user.assigned_station_id
+      }
+    });
+  } catch (error) {
+    console.error('Substation login error:', error);
+    return res.status(500).json({
+      message: 'Login failed',
+      error: error.message
+    });
+  }
+});
+
+// Logout endpoint (records logout time in officer_login_history)
+router.post('/logout', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(400).json({ message: 'Invalid token payload (missing user id)' });
+    }
+
+    console.log('[POST /logout] Request received for userId:', userId);
+
+    const { data: rows, error } = await supabase
+      .from('officer_login_history')
+      .select('id')
+      .eq('user_id', userId)
+      .is('logout_time', null)
+      .order('login_time', { ascending: false })
+      .limit(1);
+
+    if (error) {
+      console.error('[POST /logout] officer_login_history select error:', error);
+      return res.status(500).json({ message: 'Database error', error: error.message });
+    }
+
+    const latest = rows?.[0];
+    if (!latest?.id) {
+      console.log('[POST /logout] No active session row found for userId:', userId);
+      return res.json({ success: true, message: 'No active login session found' });
+    }
+
+    console.log('[POST /logout] Updating officer_login_history id:', latest.id);
+
+    const { error: updateError } = await supabase
+      .from('officer_login_history')
+      .update({ logout_time: new Date().toISOString(), status: 'Offline' })
+      .eq('id', latest.id);
+
+    if (updateError) {
+      console.error('[POST /logout] officer_login_history update error:', updateError);
+      return res.status(500).json({ message: 'Failed to record logout', error: updateError.message });
+    }
+
+    return res.json({ success: true });
+  } catch (e) {
+    console.error('Logout error:', e);
+    return res.status(500).json({ message: 'Logout failed', error: e.message });
+  }
+});
+
+// Update current user's profile
+router.put('/me', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(400).json({ message: 'Invalid token payload (missing user id)' });
+    }
+
+    const { firstName, lastName, rank, phoneNumber, email } = req.body || {};
+
+    const updates = {};
+    if (typeof firstName === 'string') updates.first_name = firstName.trim();
+    if (typeof lastName === 'string') updates.last_name = lastName.trim();
+    if (typeof rank === 'string') updates.rank = rank.trim();
+    if (typeof phoneNumber === 'string') updates.phone_number = phoneNumber.trim();
+    if (typeof email === 'string') updates.email = email.trim();
+
+    if (updates.first_name || updates.last_name) {
+      const fn = updates.first_name ?? null;
+      const ln = updates.last_name ?? null;
+      if (fn !== null || ln !== null) {
+        const { data: existingUser, error: existingError } = await supabase
+          .from('users')
+          .select('first_name, last_name')
+          .eq('user_id', userId)
+          .single();
+
+        if (existingError) {
+          console.error('[PUT /me] Failed to fetch existing user:', existingError);
+          return res.status(500).json({ message: 'Failed to update profile', error: existingError.message });
+        }
+
+        const nextFirst = (updates.first_name ?? existingUser?.first_name ?? '').trim();
+        const nextLast = (updates.last_name ?? existingUser?.last_name ?? '').trim();
+        updates.full_name = `${nextFirst} ${nextLast}`.trim();
+      }
+    }
+
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ message: 'No valid fields to update' });
+    }
+
+    const { error: updateError } = await supabase
+      .from('users')
+      .update(updates)
+      .eq('user_id', userId);
+
+    if (updateError) {
+      console.error('[PUT /me] Supabase update error:', updateError);
+      return res.status(500).json({ message: 'Failed to update profile', error: updateError.message });
+    }
+
+    const { data: user, error: fetchError } = await supabase
+      .from('users')
+      .select('*')
+      .eq('user_id', userId)
+      .single();
+
+    if (fetchError) {
+      console.error('[PUT /me] Supabase fetch error:', fetchError);
+      return res.status(500).json({ message: 'Failed to fetch updated profile', error: fetchError.message });
+    }
+
+    let stationInfo = null;
+    if (user?.assigned_station_id) {
+      const { data: stations } = await supabase
+        .from('fire_stations')
+        .select('*')
+        .eq('station_id', user.assigned_station_id)
+        .single();
+      stationInfo = stations || null;
+    }
+
+    return res.json({
+      success: true,
+      user: {
+        id: user.user_id,
+        idNumber: user.id_number,
+        name: `${user.first_name} ${user.last_name}`,
+        firstName: user.first_name,
+        lastName: user.last_name,
+        rank: user.rank,
+        substation: user.substation,
+        assignedStationId: user.assigned_station_id,
+        stationInfo,
+        role: user.role,
+        assigned: !!user.assigned_station_id,
+      },
+    });
+  } catch (e) {
+    console.error('[PUT /me] Exception:', e);
+    return res.status(500).json({ message: 'Failed to update profile', error: e.message });
+  }
+});
+
+// Change current user's password
+router.post('/change-password', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(400).json({ message: 'Invalid token payload (missing user id)' });
+    }
+
+    const { currentPassword, newPassword } = req.body || {};
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ message: 'currentPassword and newPassword are required' });
+    }
+
+    const { data: user, error: fetchError } = await supabase
+      .from('users')
+      .select('user_id, password')
+      .eq('user_id', userId)
+      .single();
+
+    if (fetchError) {
+      console.error('[POST /change-password] Supabase fetch error:', fetchError);
+      return res.status(500).json({ message: 'Failed to change password', error: fetchError.message });
+    }
+
+    let passwordMatch = false;
+    try {
+      passwordMatch = await bcrypt.compare(String(currentPassword), String(user.password));
+    } catch (err) {
+      if (String(currentPassword) === String(user.password)) {
+        passwordMatch = true;
+      }
+    }
+
+    if (!passwordMatch) {
+      return res.status(401).json({ message: 'Current password is incorrect' });
+    }
+
+    const hashedPassword = await bcrypt.hash(String(newPassword), 10);
+    const { error: updateError } = await supabase
+      .from('users')
+      .update({ password: hashedPassword })
+      .eq('user_id', userId);
+
+    if (updateError) {
+      console.error('[POST /change-password] Supabase update error:', updateError);
+      return res.status(500).json({ message: 'Failed to change password', error: updateError.message });
+    }
+
+    return res.json({ success: true });
+  } catch (e) {
+    console.error('[POST /change-password] Exception:', e);
+    return res.status(500).json({ message: 'Failed to change password', error: e.message });
+  }
+});
+
+// Officer login history (admin = all, others = own station)
+router.get('/officer-login-history', authenticateToken, async (req, res) => {
+  try {
+    const role = String(req.user?.role || '').toLowerCase();
+    const isAdmin = role === 'admin';
+    const stationId = req.user?.assignedStationId || null;
+
+    let query = supabase
+      .from('officer_login_history')
+      .select(
+        `id, station_id, login_time, logout_time, status, user_id, users: user_id (full_name, rank), fire_stations: station_id (station_name)`
+      )
+      .order('login_time', { ascending: false });
+
+    if (!isAdmin) {
+      if (!stationId) {
+        return res.status(400).json({ success: false, message: 'User has no assigned station' });
+      }
+      query = query.eq('station_id', stationId);
+    }
+
+    const { data, error } = await query;
+    if (error) {
+      console.error('GET /officer-login-history error:', error);
+      return res.status(500).json({ success: false, message: 'Failed to fetch login history', error: error.message });
+    }
+
+    return res.json({ success: true, data: data || [] });
+  } catch (e) {
+    console.error('GET /officer-login-history exception:', e);
+    return res.status(500).json({ success: false, message: 'Failed to fetch login history', error: e.message });
+  }
+});
+
 // Signup endpoint
 router.post('/signup', async (req, res) => {
   try {
@@ -157,6 +520,38 @@ router.post('/signup', async (req, res) => {
 
     // Insert new user (include assigned_station_id if provided)
     const assignedStationId = req.body.assignedStationId || null;
+
+    if (assignedStationId) {
+      const { data: stationRow, error: stationErr } = await supabase
+        .from('fire_stations')
+        .select('station_id, station_type')
+        .eq('station_id', assignedStationId)
+        .single();
+
+      if (stationErr) {
+        return res.status(400).json({
+          message: 'Invalid assigned station',
+          error: stationErr.message,
+        });
+      }
+
+      const stationType = String(stationRow?.station_type || '').toLowerCase();
+      const roleLower = String(role || '').toLowerCase();
+
+      // Enforce: substation roles cannot be assigned to Main
+      if ((roleLower === 'substation_admin' || roleLower === 'driver') && stationType === 'main') {
+        return res.status(400).json({
+          message: 'Substation users cannot be assigned to the Main station'
+        });
+      }
+
+      // Enforce: admin (Main) accounts cannot be assigned to Substation
+      if (roleLower === 'admin' && stationType === 'substation') {
+        return res.status(400).json({
+          message: 'Main station users cannot be assigned to a Substation'
+        });
+      }
+    }
     const { data: newUser, error: insertError } = await supabase
       .from('users')
       .insert([{
@@ -410,16 +805,26 @@ router.put('/update-station', authenticateToken, async (req, res) => {
 // Public: list fire stations (id and name) for assignment dropdown
 router.get('/stations', async (req, res) => {
   try {
-    const { data: rows, error } = await supabase
+    const stationType = req.query.stationType || req.query.station_type || null;
+
+    let query = supabase
       .from('fire_stations')
-      .select('station_id, station_name')
+      .select('station_id, station_name, station_type')
       .order('station_name', { ascending: true });
 
+    if (stationType) {
+      query = query.eq('station_type', stationType);
+    }
+
+    const { data: rows, error } = await query;
+
     if (error) throw error;
+
+    // Response shape expected by the admin frontend
     res.json({ stations: rows });
   } catch (error) {
     console.error('Get stations error:', error);
-    res.status(500).json({ message: 'Failed to retrieve stations', error: error.message });
+    res.status(500).json({ message: 'Failed to fetch stations', error: error.message });
   }
 });
 
@@ -521,9 +926,6 @@ router.get('/officers', authenticateToken, async (req, res) => {
     res.status(500).json({ success: false, message: 'Failed to get officers', error: error.message });
   }
 });
-
-export default router;
-
 // Protected endpoint to verify JWT and return current user info
 // Frontend should call GET /api/me with Authorization: Bearer <token>
 router.get('/me', authenticateToken, async (req, res) => {
@@ -535,4 +937,6 @@ router.get('/me', authenticateToken, async (req, res) => {
     res.status(500).json({ message: 'Failed to verify token', error: error.message });
   }
 });
+
+export default router;
 

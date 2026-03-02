@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import { useAuth } from './AuthContext';
+import apiClient from '../utils/apiClient';
 
 // Create context
 const StatusContext = createContext();
@@ -74,19 +75,7 @@ export const StatusProvider = ({ children }) => {
         const stationId = user?.assignedStationId || user?.assigned_station_id || null;
         if (!stationId) return;
 
-        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-        const token = localStorage.getItem('authToken');
-
-        const res = await fetch(`${apiUrl}/station-readiness/${stationId}`, {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
-        });
-
-        if (!res.ok) return;
-        const data = await res.json();
+        const data = await apiClient.get(`/station-readiness/${stationId}`);
 
         // Expecting { readinessPercentage, status, ... }
         const rp = data.readinessPercentage ?? data.readiness_percentage ?? null;

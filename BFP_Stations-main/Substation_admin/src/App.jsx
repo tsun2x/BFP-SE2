@@ -1,5 +1,5 @@
 import React, { useEffect, useContext, useRef } from 'react';
-import { BrowserRouter, Routes, Route, useLocation, useNavigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useLocation, useNavigate, Navigate } from "react-router-dom";
 import { io } from 'socket.io-client';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { CallProvider, CallContext } from './context/CallContext';
@@ -45,6 +45,20 @@ function AppContent() {
   const noLayoutRoutes = ["/login", "/signup"];
 
   const hideLayout = noLayoutRoutes.includes(location.pathname);
+
+  useEffect(() => {
+    const handler = (e) => {
+      // When navigating via browser back/forward, React state may be restored from bfcache.
+      // Enforce auth based on token presence to prevent viewing protected pages after logout.
+      const token = localStorage.getItem('authToken');
+      const isPublic = noLayoutRoutes.includes(window.location.pathname);
+      if (!token && !isPublic) {
+        window.location.replace('/login');
+      }
+    };
+    window.addEventListener('pageshow', handler);
+    return () => window.removeEventListener('pageshow', handler);
+  }, []);
 
   // Trigger mock incident for testing
   const triggerMockIncident = () => {
@@ -272,6 +286,7 @@ function AppContent() {
                 <Route path="/emergency-calls" element={<ProtectedRoute><EmergencyCallHistory /></ProtectedRoute>} />
                 <Route path="/officers" element={<ProtectedRoute><Officers /></ProtectedRoute>} />
                 <Route path="/incident-report" element={<ProtectedRoute><IncidentReport /></ProtectedRoute>} />
+                <Route path="/branch-status" element={<Navigate to="/station-readiness" replace />} />
                 <Route path="/station-readiness" element={<ProtectedRoute><StationReadiness /></ProtectedRoute>} />
                 <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
                 <Route path="/test" element={<ProtectedRoute><TestPage /></ProtectedRoute>} />

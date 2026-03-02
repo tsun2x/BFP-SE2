@@ -36,7 +36,18 @@ export const apiCall = async (endpoint, options = {}) => {
       window.location.href = "/login";
     }
 
-    const data = await response.json();
+    const contentType = response.headers.get('content-type') || '';
+    let data;
+
+    if (contentType.includes('application/json')) {
+      data = await response.json();
+    } else {
+      const text = await response.text();
+      if (!response.ok) {
+        throw new Error(text || `API error: ${response.status}`);
+      }
+      return { success: true, data: text };
+    }
 
     if (!response.ok) {
       throw new Error(data.message || `API error: ${response.status}`);

@@ -62,14 +62,14 @@ export default function AdminLogin() {
 
       if (result.success) {
         const user = JSON.parse(localStorage.getItem("user"));
-        if (user?.role !== "super_admin") {
+        if (user?.role !== "super_admin" && user?.role !== "admin") {
           localStorage.removeItem("authToken");
           localStorage.removeItem("user");
           setLoginError("Only Super Admin can access the portal.");
           return;
         }
 
-        navigate("/admin-dashboard");
+        navigate("/");
       } else {
         setLoginError(result.error || "Login failed. Please try again.");
       }

@@ -1,6 +1,7 @@
 import express from 'express';
 import { supabase } from '../supabaseClient.js';
 import { authenticateToken } from '../middleware/auth.js';
+import { requireRoles, isAdminUser, getUserStationId } from '../middleware/role.js';
 
 const router = express.Router();
 
@@ -33,6 +34,7 @@ router.post('/create-incident', authenticateToken, async (req, res) => {
         message: 'Phone number, coordinates, and alarm level are required'
       });
     }
+
 
     // Check if caller exists or create new end user via Supabase
     const { data: callerRows, error: callerErr } = await supabase
@@ -72,6 +74,7 @@ router.post('/create-incident', authenticateToken, async (req, res) => {
     } else {
       callerId = callerRows[0].user_id;
     }
+
 
     // Map incident type to alarm level if not provided
     const alarmLevelEnum = alarmLevel.includes('Alarm') 
@@ -152,16 +155,31 @@ router.post('/create-incident', authenticateToken, async (req, res) => {
 });
 
 // Get all incidents/alarms
-router.get('/incidents', authenticateToken, async (req, res) => {
+router.get('/incidents', authenticateToken, requireRoles(['admin', 'substation_admin', 'driver']), async (req, res) => {
   try {
+    const isAdmin = isAdminUser(req.user);
+    const stationId = getUserStationId(req.user);
+
+    if (!isAdmin && !stationId) {
+      return res.status(400).json({
+        message: 'User has no assigned station'
+      });
+    }
+
     // Fetch alarms with related user/station/truck/log details (embeds require foreign keys)
-    const { data: alarms, error: alarmsErr } = await supabase
+    let query = supabase
       .from('alarms')
       .select(
-        `alarm_id,end_user_id,user_latitude,user_longitude,initial_alarm_level,current_alarm_level,status,call_time,dispatch_time,resolve_time,users(full_name,phone_number),fire_stations(station_name),firetrucks(plate_number),alarm_response_log(details)`
+        `alarm_id,end_user_id,user_latitude,user_longitude,initial_alarm_level,current_alarm_level,status,assigned_station_id,call_time,dispatch_time,resolve_time,users(full_name,phone_number),fire_stations(station_name),firetrucks(plate_number),alarm_response_log(details)`
       )
       .order('call_time', { ascending: false })
       .limit(50);
+
+    if (!isAdmin) {
+      query = query.eq('assigned_station_id', stationId);
+    }
+
+    const { data: alarms, error: alarmsErr } = await query;
 
     if (alarmsErr) throw alarmsErr;
 
@@ -176,6 +194,7 @@ router.get('/incidents', authenticateToken, async (req, res) => {
       initial_alarm_level: a.initial_alarm_level,
       current_alarm_level: a.current_alarm_level,
       status: a.status,
+      assigned_station_id: a.assigned_station_id ?? null,
       call_time: a.call_time,
       dispatch_time: a.dispatch_time,
       resolve_time: a.resolve_time,
@@ -195,13 +214,20 @@ router.get('/incidents', authenticateToken, async (req, res) => {
 });
 
 // Get incident details
-router.get('/incidents/:alarmId', authenticateToken, async (req, res) => {
+router.get('/incidents/:alarmId', authenticateToken, requireRoles(['admin', 'substation_admin', 'driver']), async (req, res) => {
   try {
     const { alarmId } = req.params;
 
+    const isAdmin = isAdminUser(req.user);
+    const stationId = getUserStationId(req.user);
+
+    if (!isAdmin && !stationId) {
+      return res.status(400).json({ message: 'User has no assigned station' });
+    }
+
     const { data: alarms, error: alarmErr } = await supabase
       .from('alarms')
-      .select('alarm_id,end_user_id,user_latitude,user_longitude,initial_alarm_level,current_alarm_level,status,call_time,dispatch_time,resolve_time,users(full_name,phone_number)')
+      .select('alarm_id,end_user_id,user_latitude,user_longitude,initial_alarm_level,current_alarm_level,status,assigned_station_id,call_time,dispatch_time,resolve_time,users(full_name,phone_number)')
       .eq('alarm_id', alarmId)
       .limit(1);
 
@@ -209,6 +235,13 @@ router.get('/incidents/:alarmId', authenticateToken, async (req, res) => {
 
     if (!alarms || alarms.length === 0) {
       return res.status(404).json({ message: 'Incident not found' });
+    }
+
+    if (!isAdmin) {
+      const incidentStationId = alarms?.[0]?.assigned_station_id ?? null;
+      if (String(incidentStationId) !== String(stationId)) {
+        return res.status(403).json({ message: 'Forbidden: incident is not assigned to your station' });
+      }
     }
 
     const { data: logs, error: logsErr } = await supabase
@@ -230,15 +263,37 @@ router.get('/incidents/:alarmId', authenticateToken, async (req, res) => {
 });
 
 // Update incident alarm level
-router.patch('/incidents/:alarmId/update-alarm-level', authenticateToken, async (req, res) => {
+router.patch('/incidents/:alarmId/update-alarm-level', authenticateToken, requireRoles(['admin', 'substation_admin', 'driver']), async (req, res) => {
   try {
     const { alarmId } = req.params;
     const { newAlarmLevel } = req.body;
+
+    const isAdmin = isAdminUser(req.user);
+    const stationId = getUserStationId(req.user);
+
+    if (!isAdmin && !stationId) {
+      return res.status(400).json({ message: 'User has no assigned station' });
+    }
 
     if (!newAlarmLevel) {
       return res.status(400).json({
         message: 'New alarm level is required'
       });
+    }
+
+    if (!isAdmin) {
+      // Ensure incident belongs to user's station
+      const { data: incidentRow, error: incidentErr } = await supabase
+        .from('alarms')
+        .select('alarm_id, assigned_station_id')
+        .eq('alarm_id', alarmId)
+        .single();
+
+      if (incidentErr) throw incidentErr;
+
+      if (String(incidentRow?.assigned_station_id ?? '') !== String(stationId)) {
+        return res.status(403).json({ message: 'Forbidden: incident is not assigned to your station' });
+      }
     }
 
     const { error: updateErr } = await supabase

@@ -67,7 +67,8 @@ router.post('/firestations', authenticateToken, requireRole('admin'), async (req
           city: city || null,
           contact_number: contactNumber || null,
           latitude: lat,
-          longitude: lng
+          longitude: lng,
+          station_type: stationType || null
         }
       ])
       .select('station_id')
@@ -99,6 +100,7 @@ router.put('/firestations/:id', authenticateToken, requireRole('admin'), async (
       updates.latitude = parseFloat(latitude);
       updates.longitude = parseFloat(longitude);
     }
+    if (stationType !== undefined) updates.station_type = stationType;
 
     if (Object.keys(updates).length === 0) {
       return res.status(400).json({ message: 'No fields provided to update' });

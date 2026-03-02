@@ -1,4 +1,5 @@
 import { createContext, useState, useEffect, useContext } from "react";
+import apiClient, { apiCall } from "../utils/apiClient";
 
 export const AuthContext = createContext();
 
@@ -56,30 +57,13 @@ export function AuthProvider({ children }) {
   // Verify token by calling protected /me endpoint which returns decoded user info
   const verifyToken = async (token) => {
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
-      const response = await fetch(`${apiUrl}/me`, {
-        method: "GET",
+      const data = await apiCall('/me', {
+        method: 'GET',
         headers: {
-          "Authorization": `Bearer ${token}`,
-          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
         },
       });
 
-      if (response.status === 401) {
-        // Explicitly invalid/expired token -> clear session
-        localStorage.removeItem("authToken");
-        localStorage.removeItem("user");
-        setUser(null);
-        setIsAuthenticated(false);
-        return false;
-      }
-      if (!response.ok) {
-        // Don't force logout on transient server errors (e.g. 500, 404, CORS issues)
-        throw new Error(`Token verification failed: ${response.status}`);
-      }
-
-      const data = await response.json();
-      // Expecting { user: { ... } }
       return data?.user || false;
     } catch (error) {
       console.error("Token verification error:", error);
@@ -94,22 +78,7 @@ export function AuthProvider({ children }) {
   const login = async (idNumber, password) => {
     setIsLoading(true);
     try {
-      const apiUrl = getApiUrl();
-      
-      // Use the new Node.js backend endpoint (no .php extension)
-      const response = await fetch(`${apiUrl}/login`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ idNumber, password }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || "Login failed");
-      }
+      const data = await apiClient.post('/login', { idNumber, password });
 
       // Store token and user info in localStorage (persists across page refreshes)
       localStorage.setItem("authToken", data.token);
@@ -130,27 +99,13 @@ export function AuthProvider({ children }) {
   const signup = async (userData) => {
     setIsLoading(true);
     try {
-      const apiUrl = getApiUrl();
-      
       // Determine which endpoint to use
       // Use /signup-station when station details are provided (stationName or coordinates)
       // Otherwise use /signup which is the regular user signup flow
       const hasStationDetails = userData.stationName || userData.latitude || userData.longitude;
       const endpoint = hasStationDetails ? '/signup-station' : '/signup';
-      
-      const response = await fetch(`${apiUrl}${endpoint}`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(userData),
-      });
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || "Signup failed");
-      }
+      const data = await apiClient.post(endpoint, userData);
 
       return { success: true, message: data.message };
     } catch (error) {
@@ -161,7 +116,11 @@ export function AuthProvider({ children }) {
     }
   };
 
-  const logout = () => {
+  const logout = async () => {
+    try {
+      await apiClient.post('/logout', {});
+    } catch (e) {}
+
     localStorage.removeItem("authToken");
     localStorage.removeItem("user");
     setUser(null);

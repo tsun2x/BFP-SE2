@@ -4,7 +4,7 @@ import '../style/newsroom.css'
 import '../style/modals.css'
 import '../style/NRmodals.css'
 import { AuthContext } from '../context/AuthContext'
-import supabase from '../utils/supabaseClient'
+import apiClient from '../utils/apiClient'
 
 function ContentManagement() {
 
@@ -57,18 +57,8 @@ function ContentManagement() {
 
   const fetchSafetyTips = async () => {
     try {
-      const { data, error } = await supabase
-        .from('safety_tips')
-        .select('*')
-        .order('created_at', { ascending: false })
-
-      if (error) {
-        console.error('Supabase fetch safety tips error:', error)
-        showNotification('error', 'Failed to fetch safety tips: ' + error.message)
-        return
-      }
-
-      setSafetyTips(Array.isArray(data) ? data : [])
+      const json = await apiClient.get('/safety-tips')
+      setSafetyTips(Array.isArray(json?.data) ? json.data : [])
     } catch (err) {
       showNotification('error', 'Failed to fetch safety tips.')
     }
@@ -76,48 +66,11 @@ function ContentManagement() {
 
   const fetchSafetyCategories = async () => {
     try {
-      const { data, error } = await supabase
-        .from('safety_tip_categories')
-        .select('*')
-        .order('created_at', { ascending: false })
-
-      if (error) {
-        console.error('Supabase fetch safety categories error:', error)
-        showNotification('error', 'Failed to fetch categories: ' + error.message)
-        return
-      }
-
-      setSafetyCategories(Array.isArray(data) ? data : [])
+      const json = await apiClient.get('/safety-tip-categories')
+      setSafetyCategories(Array.isArray(json?.data) ? json.data : [])
     } catch (err) {
       showNotification('error', 'Failed to fetch categories.')
     }
-  }
-
-  // Improved helper function to upload image to Supabase Storage and get public URL
-  const uploadImageAndGetUrl = async (base64Data, fileNamePrefix = 'headline') => {
-    const BUCKET = 'news-images' // Change to your actual bucket name if different
-    const res = await fetch(base64Data)
-    const blob = await res.blob()
-    // Use blob.type for extension, fallback to 'jpg' if missing
-    let fileExt = 'jpg'
-    if (blob.type && blob.type.includes('/')) {
-      fileExt = blob.type.split('/')[1]
-    }
-    const fileName = `${fileNamePrefix}_${Date.now()}.${fileExt}`
-    const filePath = `${fileName}`
-    // Debug log
-    console.log('Uploading to bucket:', BUCKET, 'filePath:', filePath, 'blob:', blob)
-    const { error } = await supabase.storage.from(BUCKET).upload(filePath, blob, {
-      cacheControl: '3600',
-      upsert: true,
-      contentType: blob.type || 'image/jpeg'
-    })
-    if (error) {
-      console.error('Supabase upload error:', error.message, error)
-      throw error
-    }
-    const { data } = supabase.storage.from(BUCKET).getPublicUrl(filePath)
-    return data.publicUrl
   }
 
   const getFilteredNewsItems = () => {
@@ -143,49 +96,21 @@ function ContentManagement() {
       async () => {
         setIsLoading(true)
         try {
-          let headlineUrl = newsForm.headlineImage
-          if (headlineUrl && headlineUrl.startsWith('data:')) {
-            headlineUrl = await uploadImageAndGetUrl(newsForm.headlineImage, 'headline')
-          }
-          let additionalImagesUrls = []
-          if (newsForm.additionalImages && newsForm.additionalImages.length > 0) {
-            additionalImagesUrls = await Promise.all(
-              newsForm.additionalImages.map((img, idx) =>
-                img.startsWith('data:') ? uploadImageAndGetUrl(img, `additional_${idx}`) : img
-              )
-            )
-          }
-          const today = new Date().toISOString()
-          // Always save author as an array (even if single string)
-          let authorArr = newsForm.author
-          if (typeof authorArr === 'string') {
-            authorArr = authorArr.trim() ? [authorArr.trim()] : []
-          } else if (!Array.isArray(authorArr)) {
-            authorArr = []
-          }
           const payload = {
             title: newsForm.title,
             description: newsForm.description,
-            user_id: user?.user_id || user?.id,
-            headline_image: headlineUrl,
-            additional_images: additionalImagesUrls,
+            headline_image: newsForm.headlineImage || null,
+            additional_images: newsForm.additionalImages || [],
             published: isPublish,
-            published_at: isPublish ? today : null,
-            date: today,
-            slug: newsForm.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''),
-            metadata: {},
-            updated_at: today,
-            author: authorArr
+            author: newsForm.author || ''
           }
 
-          const { error } = editingNewsId
-            ? await supabase.from('news_room').update(payload).eq('id', editingNewsId)
-            : await supabase.from('news_room').insert([{ ...payload, created_at: today }])
-
-          if (error) {
-            console.error('Supabase save news error:', error)
-            showNotification('error', 'Failed to save news: ' + error.message)
+          if (editingNewsId) {
+            await apiClient.put(`/news/${editingNewsId}`, payload)
           } else {
+            await apiClient.post('/news', payload)
+          }
+
             showNotification(
               'success',
               isPublish
@@ -195,7 +120,6 @@ function ContentManagement() {
             setShowNewsModal(false)
             resetNewsForm()
             fetchNews()
-          }
         } catch (err) {
           showNotification('error', 'Failed to save news.')
         }
@@ -263,16 +187,8 @@ function ContentManagement() {
   const fetchNews = async () => {
     setIsLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('news_room')
-        .select('*')
-        .order('published_at', { ascending: false });
-      if (error) {
-        console.error('Supabase fetch error:', error); // Log full error for debugging
-        showNotification('error', 'Failed to fetch news: ' + error.message);
-      } else if (data) {
-        setNewsItems(data);
-      }
+      const json = await apiClient.get('/news')
+      setNewsItems(Array.isArray(json?.data) ? json.data : [])
     } catch (err) {
       showNotification('error', 'Failed to fetch news.');
     }
@@ -404,35 +320,37 @@ function ContentManagement() {
     }
     setIsLoading(true);
     try {
-      // Insert new category into Supabase
       const payload = {
         name: categoryForm.name.trim(),
         color: categoryForm.color,
         image_url: categoryForm.image || null,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
-      const { error } = await supabase.from('safety_tip_categories').insert([payload]);
-      if (error) {
-        showNotification('error', 'Failed to add category: ' + error.message);
-      } else {
-        showNotification('success', 'Category added successfully');
-        closeCategoryModal();
-        fetchSafetyCategories()
       }
+
+      await apiClient.post('/safety-tip-categories', payload)
+      showNotification('success', 'Category added successfully')
+      closeCategoryModal()
+      fetchSafetyCategories()
     } catch (err) {
       showNotification('error', 'Failed to add category.');
     }
     setIsLoading(false);
   }
   
-  const deleteCategory = (categoryKey) => {
+  const deleteCategory = (categoryId) => {
     showConfirmModal(
       'delete',
       'Delete Category',
       `Are you sure you want to delete this category? All safety tips in this category will also be deleted.`,
-      () => {
-        showNotification('error', 'Category deletion is not available right now')
+      async () => {
+        setIsLoading(true)
+        try {
+          await apiClient.delete(`/safety-tip-categories/${categoryId}`)
+          showNotification('success', 'Category deleted successfully')
+          fetchSafetyCategories()
+        } catch (err) {
+          showNotification('error', 'Failed to delete category.')
+        }
+        setIsLoading(false)
       }
     )
   }
@@ -539,13 +457,9 @@ function ContentManagement() {
       async () => {
         setIsLoading(true)
         try {
-          const { error } = await supabase.from('safety_tips').delete().eq('id', id)
-          if (error) {
-            showNotification('error', 'Failed to delete safety tip: ' + error.message)
-          } else {
-            showNotification('success', 'Safety tip deleted successfully')
-            fetchSafetyTips()
-          }
+          await apiClient.delete(`/safety-tips/${id}`)
+          showNotification('success', 'Safety tip deleted successfully')
+          fetchSafetyTips()
         } catch (err) {
           showNotification('error', 'Failed to delete safety tip.')
         }
@@ -569,51 +483,23 @@ function ContentManagement() {
       async () => {
         setIsLoading(true);
         try {
-          let imageUrl = image;
-          if (imageUrl && imageUrl.startsWith('data:')) {
-            imageUrl = await uploadImageAndGetUrl(imageUrl, 'safety_tip');
+          const payload = {
+            section,
+            category_id: categoryId,
+            task,
+            description: desc,
+            image_url: image || null,
           }
-          const now = new Date().toISOString()
 
           if (id) {
-            // Update existing row
-            const payload = {
-              section,
-              category_id: categoryId,
-              task,
-              description: desc,
-              image_url: imageUrl || null,
-              updated_at: now
-            }
-            const { error } = await supabase.from('safety_tips').update(payload).eq('id', id)
-            if (error) {
-              showNotification('error', 'Failed to update safety tip: ' + error.message)
-            } else {
-              showNotification('success', 'Safety tip updated successfully')
-              cancelTip()
-              fetchSafetyTips()
-            }
+            await apiClient.put(`/safety-tips/${id}`, payload)
           } else {
-            // Insert into Supabase safety_tips table
-            const payload = {
-              user_id: user?.user_id || user?.id,
-              section,
-              category_id: categoryId,
-              task,
-              description: desc,
-              image_url: imageUrl || null,
-              created_at: now,
-              updated_at: now
-            }
-            const { error } = await supabase.from('safety_tips').insert([payload])
-            if (error) {
-              showNotification('error', 'Failed to save safety tip: ' + error.message)
-            } else {
-              showNotification('success', 'Safety tip added successfully')
-              cancelTip()
-              fetchSafetyTips()
-            }
+            await apiClient.post('/safety-tips', payload)
           }
+
+          showNotification('success', id ? 'Safety tip updated successfully' : 'Safety tip added successfully')
+          cancelTip()
+          fetchSafetyTips()
         } catch (err) {
           showNotification('error', 'Failed to save safety tip.');
         }

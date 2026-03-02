@@ -1,12 +1,20 @@
 import { useState, useContext, useEffect } from "react";
 import { AuthContext } from "../context/AuthContext";
+import apiClient from "../utils/apiClient";
+import { useToast } from "../components/Toast";
 import "../style/settings.css";
 
 export default function Settings() {
-  const { user } = useContext(AuthContext);
+  const { user, logout } = useContext(AuthContext);
   const [activeTab, setActiveTab] = useState("profile");
   const [geoLoading, setGeoLoading] = useState(false);
   const [stationSaved, setStationSaved] = useState(false);
+  const toast = useToast();
+  const [isSavingStation, setIsSavingStation] = useState(false);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [profileErrors, setProfileErrors] = useState({});
+  const [stationErrors, setStationErrors] = useState({});
   const [notifications, setNotifications] = useState({
     emailAlerts: true,
     smsAlerts: false,
@@ -56,20 +64,91 @@ export default function Settings() {
     loginNotifications: true,
   });
 
+  // Load user data on mount
+  useEffect(() => {
+    if (user) {
+      const fullName = user.full_name || user.fullName || user.name || "";
+      const nameParts = typeof fullName === "string" ? fullName.trim().split(/\s+/).filter(Boolean) : [];
+      const derivedFirstName = nameParts.length ? nameParts[0] : "";
+      const derivedLastName = nameParts.length > 1 ? nameParts.slice(1).join(" ") : "";
+
+      setProfile((prev) => ({
+        ...prev,
+        firstName: user.first_name || user.firstName || derivedFirstName || prev.firstName,
+        lastName: user.last_name || user.lastName || derivedLastName || prev.lastName,
+        email: user.email || prev.email,
+        phone: user.phone_number || user.phone || prev.phone,
+        station: user.station_name || user.stationInfo?.station_name || user.substation || user.station || prev.station,
+        badgeNumber: user.id_number || user.idNumber || prev.badgeNumber,
+        rank: user.rank || prev.rank || "Fire Officer 1",
+      }));
+    }
+  }, [user]);
+
+  useEffect(() => {
+    try {
+      const cached = JSON.parse(localStorage.getItem("meProfile") || "null");
+      if (cached) {
+        setProfile((prev) => ({
+          ...prev,
+          firstName: cached.first_name || cached.firstName || prev.firstName,
+          lastName: cached.last_name || cached.lastName || prev.lastName,
+          email: cached.email || prev.email,
+          phone: cached.phone_number || cached.phone || prev.phone,
+          station: cached.station_name || cached.substation || cached.station || prev.station,
+          badgeNumber: cached.id_number || cached.idNumber || prev.badgeNumber,
+          rank: cached.rank || prev.rank,
+        }));
+      }
+    } catch (e) {}
+
+    const hydrateMe = async () => {
+      try {
+        const data = await apiClient.get("/me");
+        const me = data?.user || data;
+        if (!me) return;
+
+        setProfile((prev) => ({
+          ...prev,
+          firstName: me.first_name || me.firstName || prev.firstName,
+          lastName: me.last_name || me.lastName || prev.lastName,
+          email: me.email || prev.email,
+          phone: me.phone_number || me.phone || prev.phone,
+          station: me.station_name || me.substation || me.station || prev.station,
+          badgeNumber: me.id_number || me.idNumber || prev.badgeNumber,
+          rank: me.rank || prev.rank,
+        }));
+
+        try {
+          const stored = JSON.parse(localStorage.getItem("user") || "{}");
+          localStorage.setItem("user", JSON.stringify({ ...stored, ...me }));
+        } catch (e) {}
+
+        try {
+          localStorage.setItem("meProfile", JSON.stringify(me));
+        } catch (e) {}
+      } catch (err) {
+        console.error("Failed to hydrate /me:", err);
+      }
+    };
+
+    hydrateMe();
+  }, []);
+
   const handleNotificationChange = (key) => {
-    setNotifications(prev => ({ ...prev, [key]: !prev[key] }));
+    setNotifications((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
   const handleProfileChange = (field, value) => {
-    setProfile(prev => ({ ...prev, [field]: value }));
+    setProfile((prev) => ({ ...prev, [field]: value }));
   };
 
   const handleAppearanceChange = (field, value) => {
-    setAppearance(prev => ({ ...prev, [field]: value }));
+    setAppearance((prev) => ({ ...prev, [field]: value }));
   };
 
   const handleSecurityChange = (field, value) => {
-    setSecurity(prev => ({ ...prev, [field]: value }));
+    setSecurity((prev) => ({ ...prev, [field]: value }));
   };
 
   const handleGetCoordinates = () => {
@@ -78,59 +157,131 @@ export default function Settings() {
       navigator.geolocation.getCurrentPosition(
         (position) => {
           const { latitude, longitude } = position.coords;
-          setStationSettings(prev => ({
+          setStationSettings((prev) => ({
             ...prev,
             latitude: latitude.toFixed(8),
-            longitude: longitude.toFixed(8)
+            longitude: longitude.toFixed(8),
           }));
           setGeoLoading(false);
         },
         (error) => {
           console.error("Geolocation error:", error);
-          alert("Unable to get your location. Please check browser permissions.");
+          toast.error("Unable to get your location. Please check browser permissions.");
           setGeoLoading(false);
         }
       );
     } else {
-      alert("Geolocation is not supported by your browser.");
+      toast.error("Geolocation is not supported by your browser.");
       setGeoLoading(false);
     }
   };
 
   const handleStationChange = (field, value) => {
-    setStationSettings(prev => ({ ...prev, [field]: value }));
+    setStationSettings((prev) => ({ ...prev, [field]: value }));
   };
 
   const handleSaveStationSettings = async () => {
+    setStationErrors({});
+    if (!stationSettings.stationName || stationSettings.stationName.trim() === "") {
+      setStationErrors({ stationName: "Station name is required" });
+      toast.error("Station name is required");
+      return;
+    }
+
+    const lat = stationSettings.latitude !== "" ? parseFloat(stationSettings.latitude) : null;
+    const lng = stationSettings.longitude !== "" ? parseFloat(stationSettings.longitude) : null;
+    if (lat !== null && (isNaN(lat) || lat < -90 || lat > 90)) {
+      setStationErrors({ latitude: "Latitude must be between -90 and 90" });
+      toast.error("Latitude must be between -90 and 90");
+      return;
+    }
+    if (lng !== null && (isNaN(lng) || lng < -180 || lng > 180)) {
+      setStationErrors({ longitude: "Longitude must be between -180 and 180" });
+      toast.error("Longitude must be between -180 and 180");
+      return;
+    }
+
+    setIsSavingStation(true);
     try {
-      const token = localStorage.getItem("authToken");
-      const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
-      
-      const response = await fetch(`${apiUrl}/update-station`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          stationName: stationSettings.stationName,
-          latitude: parseFloat(stationSettings.latitude),
-          longitude: parseFloat(stationSettings.longitude),
-          contactNumber: stationSettings.contactNumber
-        })
+      toast.info("Saving station...");
+      await apiClient.put("/update-station", {
+        stationName: stationSettings.stationName,
+        latitude: lat,
+        longitude: lng,
+        contactNumber: stationSettings.contactNumber || null,
       });
 
-      const data = await response.json();
-      if (response.ok) {
-        setStationSaved(true);
-        setTimeout(() => setStationSaved(false), 3000);
-        alert("Station settings updated successfully!");
-      } else {
-        alert(data.message || "Failed to update station settings");
-      }
+      setStationSaved(true);
+      setTimeout(() => setStationSaved(false), 3000);
+      toast.success("Station settings updated successfully");
     } catch (error) {
       console.error("Error saving station settings:", error);
-      alert("Error saving station settings");
+      toast.error(error.message || "Failed to save station settings");
+    } finally {
+      setIsSavingStation(false);
+    }
+  };
+
+  const handleSaveProfile = async () => {
+    setProfileErrors({});
+    if (!profile.firstName || !profile.lastName) {
+      setProfileErrors({ name: "First and last name are required" });
+      toast.error("First and last name are required");
+      return;
+    }
+    if (profile.email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(profile.email)) {
+      setProfileErrors({ email: "Invalid email" });
+      toast.error("Invalid email address");
+      return;
+    }
+
+    setIsSavingProfile(true);
+    try {
+      const payload = {
+        first_name: profile.firstName,
+        last_name: profile.lastName,
+        email: profile.email,
+        phone: profile.phone,
+        station: profile.station,
+        badge_number: profile.badgeNumber,
+        rank: profile.rank,
+      };
+      await apiClient.put("/me", payload);
+      toast.success("Profile updated");
+
+      try {
+        const stored = JSON.parse(localStorage.getItem("user") || "{}");
+        const updated = { ...stored, ...payload };
+        localStorage.setItem("user", JSON.stringify(updated));
+      } catch (e) {}
+    } catch (err) {
+      console.error("Profile save error", err);
+      toast.error(err.message || "Failed to save profile");
+    } finally {
+      setIsSavingProfile(false);
+    }
+  };
+
+  const handleChangePassword = async () => {
+    const current = window.prompt("Enter current password:");
+    if (!current) return;
+    const newPass = window.prompt("Enter new password (min 8 chars):");
+    if (!newPass) return;
+    if (newPass.length < 8) {
+      toast.error("New password must be at least 8 characters");
+      return;
+    }
+
+    setIsChangingPassword(true);
+    try {
+      await apiClient.post("/change-password", { currentPassword: current, newPassword: newPass });
+      toast.success("Password changed. Please login again.");
+      logout();
+    } catch (err) {
+      console.error("Change password error", err);
+      toast.error(err.message || "Failed to change password");
+    } finally {
+      setIsChangingPassword(false);
     }
   };
 
@@ -154,7 +305,7 @@ export default function Settings() {
         {/* Sidebar Navigation */}
         <div className="settings-sidebar">
           <div className="settings-nav">
-            {tabs.map(tab => (
+            {tabs.map((tab) => (
               <button
                 key={tab.id}
                 className={`settings-nav-item ${activeTab === tab.id ? "active" : ""}`}
@@ -174,7 +325,7 @@ export default function Settings() {
             <div className="settings-section">
               <h2>Profile Information</h2>
               <p className="section-description">Update your personal information and contact details</p>
-              
+
               <div className="settings-form">
                 <div className="form-row">
                   <div className="form-group">
@@ -248,7 +399,13 @@ export default function Settings() {
                 </div>
 
                 <div className="form-actions">
-                  <button className="btn btn-primary">Save Changes</button>
+                  <button
+                    className="btn btn-primary"
+                    onClick={handleSaveProfile}
+                    disabled={isSavingProfile}
+                  >
+                    {isSavingProfile ? "Saving..." : "Save Changes"}
+                  </button>
                   <button className="btn btn-secondary">Cancel</button>
                 </div>
               </div>
@@ -260,7 +417,7 @@ export default function Settings() {
             <div className="settings-section">
               <h2>Notification Preferences</h2>
               <p className="section-description">Choose how you want to receive notifications</p>
-              
+
               <div className="notification-groups">
                 <div className="notification-group">
                   <h3>Alert Types</h3>
@@ -359,7 +516,7 @@ export default function Settings() {
             <div className="settings-section">
               <h2>Appearance</h2>
               <p className="section-description">Customize the look and feel of your interface</p>
-              
+
               <div className="settings-form">
                 <div className="form-group">
                   <label>Theme</label>
@@ -423,7 +580,7 @@ export default function Settings() {
             <div className="settings-section">
               <h2>Security</h2>
               <p className="section-description">Manage your account security and privacy</p>
-              
+
               <div className="security-settings">
                 <div className="security-group">
                   <h3>Authentication</h3>
@@ -495,7 +652,13 @@ export default function Settings() {
 
                 <div className="security-actions">
                   <button className="btn btn-primary">Update Security Settings</button>
-                  <button className="btn btn-outline">Change Password</button>
+                  <button
+                    className="btn btn-outline"
+                    onClick={handleChangePassword}
+                    disabled={isChangingPassword}
+                  >
+                    {isChangingPassword ? "Changing..." : "Change Password"}
+                  </button>
                   <button className="btn btn-danger">Sign Out All Devices</button>
                 </div>
               </div>
@@ -507,6 +670,7 @@ export default function Settings() {
             <div className="settings-section">
               <h2>System Settings</h2>
               <p className="section-description">Advanced system configuration and maintenance</p>
+
               
               <div className="system-settings">
                 <div className="system-group">
@@ -610,9 +774,8 @@ export default function Settings() {
                   <input
                     type="text"
                     value={stationSettings.contactNumber}
-                    readOnly
+                    onChange={(e) => handleStationChange("contactNumber", e.target.value)}
                     placeholder="e.g., 991-XXX-XXXX"
-                    style={{ backgroundColor: '#f7f7f7' }}
                   />
                 </div>
 
@@ -622,10 +785,9 @@ export default function Settings() {
                     <input
                       type="number"
                       value={stationSettings.latitude}
-                      readOnly
+                      onChange={(e) => handleStationChange("latitude", e.target.value)}
                       placeholder="e.g., 7.515"
                       step="0.00000001"
-                      style={{ backgroundColor: '#f7f7f7' }}
                     />
                   </div>
                   <div className="form-group">
@@ -633,12 +795,20 @@ export default function Settings() {
                     <input
                       type="number"
                       value={stationSettings.longitude}
-                      readOnly
+                      onChange={(e) => handleStationChange("longitude", e.target.value)}
                       placeholder="e.g., 122.015"
                       step="0.00000001"
-                      style={{ backgroundColor: '#f7f7f7' }}
                     />
                   </div>
+                </div>
+
+                <div className="form-actions">
+                  <button className="btn btn-secondary" onClick={handleGetCoordinates} disabled={geoLoading}>
+                    {geoLoading ? "Getting location..." : "Get Coordinates"}
+                  </button>
+                  <button className="btn btn-primary" onClick={handleSaveStationSettings} disabled={isSavingStation}>
+                    {isSavingStation ? "Saving..." : "Save Station"}
+                  </button>
                 </div>
               </div>
             </div>

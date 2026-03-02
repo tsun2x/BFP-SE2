@@ -4,6 +4,7 @@ import { useStatus } from "../context/StatusContext";
 import "../style/stationreadiness.css";
 import ConfirmModal from "../components/ConfirmModal";
 import Toast from "../components/Toast";
+import apiClient from "../utils/apiClient";
 
 export default function StationReadiness() {
   const { user } = useAuth();
@@ -184,17 +185,6 @@ export default function StationReadiness() {
     setLoading(true);
 
     try {
-      const token = localStorage.getItem("authToken");
-      const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
-
-      if (!token) {
-        throw new Error("Not authenticated. Please log in.");
-      }
-
-      if (!user?.assignedStationId) {
-        throw new Error("Your account is not assigned to a station.");
-      }
-
       const { finalStatus, readinessPercentage } = calculateReadiness();
 
       const payload = {
@@ -203,20 +193,7 @@ export default function StationReadiness() {
         equipmentChecklist: checklist
       };
 
-      const response = await fetch(`${apiUrl}/station-readiness`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(payload)
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to submit readiness');
-      }
+      await apiClient.post('/station-readiness', payload);
 
       // Update UI status
       updateStationStatus(finalStatus, readinessPercentage);
@@ -225,7 +202,11 @@ export default function StationReadiness() {
       setToastType("success");
 
       console.log("Submitted Station Readiness:", {
-        stationId: user.assignedStationId,
+        stationId:
+          user?.assignedStationId ||
+          user?.assigned_station_id ||
+          user?.stationInfo?.station_id ||
+          null,
         checklist,
         finalStatus,
         readinessPercentage,

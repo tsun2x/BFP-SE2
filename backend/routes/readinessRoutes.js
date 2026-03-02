@@ -1,15 +1,17 @@
 import express from 'express';
 import { supabase } from '../supabaseClient.js';
 import { authenticateToken } from '../middleware/auth.js';
+import { requireRoles, isAdminUser, getUserStationId } from '../middleware/role.js';
 
 const router = express.Router();
 
 // Submit station readiness (by officer assigned to that station)
-router.post('/station-readiness', authenticateToken, async (req, res) => {
+router.post('/station-readiness', authenticateToken, requireRoles(['admin', 'substation_admin', 'driver']), async (req, res) => {
   try {
     const { status, readinessPercentage, equipmentChecklist } = req.body;
     const userId = req.user.id;
-    const assignedStationId = req.user.assignedStationId;
+    const isAdmin = isAdminUser(req.user);
+    const assignedStationId = getUserStationId(req.user);
 
     console.log('[POST /station-readiness] User:', userId, 'Station:', assignedStationId, 'Status:', status);
 
@@ -20,12 +22,17 @@ router.post('/station-readiness', authenticateToken, async (req, res) => {
       });
     }
 
-    // Validate user is assigned to a station
+    // Validate user is assigned to a station (admins are allowed to submit as well, but still must be station-scoped)
     if (!assignedStationId) {
       console.log('[POST /station-readiness] User not assigned to any station');
       return res.status(403).json({
         message: 'You are not assigned to any station'
       });
+    }
+
+    // Admins still submit for their own station; no cross-station submission via this endpoint
+    if (isAdmin && !assignedStationId) {
+      return res.status(400).json({ message: 'Admin has no assigned station' });
     }
 
     try {
@@ -61,6 +68,19 @@ router.post('/station-readiness', authenticateToken, async (req, res) => {
         throw insertErr;
       }
 
+      // Update fire_stations is_ready flag and last_status_update
+      const isReady = (status === 'READY' || status === 'PARTIALLY_READY') ? true : false;
+      const { error: updateErr } = await supabase
+        .from('fire_stations')
+        .update({
+          is_ready: isReady,
+          last_status_update: new Date().toISOString()
+        })
+        .eq('station_id', assignedStationId);
+      if (updateErr) {
+        console.error('[POST /station-readiness] fire_stations update error:', updateErr);
+      }
+
       console.log('[POST /station-readiness] Insert success, ID:', result?.readiness_id);
       res.status(201).json({
         message: 'Station readiness submitted successfully',
@@ -83,9 +103,21 @@ router.post('/station-readiness', authenticateToken, async (req, res) => {
 });
 
 // Get latest readiness for a specific station
-router.get('/station-readiness/:stationId', authenticateToken, async (req, res) => {
+router.get('/station-readiness/:stationId', authenticateToken, requireRoles(['admin', 'substation_admin', 'driver']), async (req, res) => {
   try {
     const { stationId } = req.params;
+
+    const isAdmin = isAdminUser(req.user);
+    const assignedStationId = getUserStationId(req.user);
+
+    if (!isAdmin) {
+      if (!assignedStationId) {
+        return res.status(403).json({ message: 'You are not assigned to any station' });
+      }
+      if (String(stationId) !== String(assignedStationId)) {
+        return res.status(403).json({ message: 'Forbidden: station is not assigned to your account' });
+      }
+    }
 
     const { data: readiness, error: readinessErr } = await supabase
       .from('station_readiness')
@@ -97,7 +129,16 @@ router.get('/station-readiness/:stationId', authenticateToken, async (req, res) 
     if (readinessErr) throw readinessErr;
 
     if (!readiness || readiness.length === 0) {
-      return res.status(404).json({ message: 'No readiness record found for this station' });
+      return res.json({
+        readinessId: null,
+        stationId: Number(stationId),
+        stationName: null,
+        status: 'NOT_READY',
+        readinessPercentage: 0,
+        equipmentChecklist: {},
+        submittedBy: 'N/A',
+        submittedAt: null,
+      });
     }
 
     const record = readiness[0];
@@ -121,9 +162,16 @@ router.get('/station-readiness/:stationId', authenticateToken, async (req, res) 
 });
 
 // Get all stations with their latest readiness (for overview)
-router.get('/stations-readiness-overview', authenticateToken, async (req, res) => {
+router.get('/stations-readiness-overview', authenticateToken, requireRoles(['admin', 'substation_admin', 'driver']), async (req, res) => {
   try {
     console.log('[GET /stations-readiness-overview] Starting...');
+
+    const isAdmin = isAdminUser(req.user);
+    const assignedStationId = getUserStationId(req.user);
+
+    if (!isAdmin && !assignedStationId) {
+      return res.status(403).json({ message: 'You are not assigned to any station' });
+    }
     
     // Fetch stations, then latest readiness per station
     const { data: stations, error: stationsErr } = await supabase
@@ -138,9 +186,10 @@ router.get('/stations-readiness-overview', authenticateToken, async (req, res) =
 
     console.log('[GET /stations-readiness-overview] Found stations:', stations?.length || 0);
 
+    const scopedStations = isAdmin ? (stations || []) : (stations || []).filter((s) => String(s.station_id) === String(assignedStationId));
     const overview = [];
 
-    for (const s of stations || []) {
+    for (const s of scopedStations) {
       const { data: latest, error: latestErr } = await supabase
         .from('station_readiness')
         .select('*')

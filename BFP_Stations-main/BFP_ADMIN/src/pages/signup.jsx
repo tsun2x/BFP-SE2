@@ -2,6 +2,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useState, useContext, useEffect } from "react";
 import { AuthContext } from "../context/AuthContext";
 import "../style/sign-up.css";
+import apiClient from "../utils/apiClient";
 
 export default function Signup() {
   const navigate = useNavigate();
@@ -101,15 +102,9 @@ export default function Signup() {
 
   const fetchStations = async () => {
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
-      const res = await fetch(`${apiUrl}/stations`);
-      if (res.ok) {
-        const data = await res.json();
-        const list = data.stations || [];
-        setStations(list);
-      } else {
-        console.error('Failed to fetch stations', res.status);
-      }
+      const data = await apiClient.get('/stations?stationType=Main');
+      const list = data.stations || [];
+      setStations(list);
     } catch (err) {
       console.error('Failed to fetch stations', err);
     }

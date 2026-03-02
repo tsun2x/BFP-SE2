@@ -2,8 +2,8 @@ import React, { useEffect, useState, useRef, useContext } from 'react'
 import { useNavigate } from 'react-router-dom'
 import '../style/content.css'
 import '../style/newsroom.css'
-import { supabase } from '../../utils/supabaseClient'
 import { AuthContext } from '../../context/AuthContext'
+import apiClient from '../../utils/apiClient'
 
 function NewsRoom() {
   const navigate = useNavigate()
@@ -26,15 +26,8 @@ function NewsRoom() {
   // loadNews moved out of useEffect for reuse
   const loadNews = async () => {
     try {
-      const { data, error } = await supabase
-        .from('news_room')
-        .select(`id, title, description, user_id, headline_image, additional_images, date, published, published_at, users:user_id (full_name, email)`)
-        .order('published_at', { ascending: false })
-
-      if (error) {
-        console.error('Failed to load news:', error)
-        return
-      }
+      const json = await apiClient.get('/news')
+      const data = json?.data || []
 
       // Map DB fields to UI expected shape
       const mapped = (data || []).map((r) => ({
@@ -80,75 +73,28 @@ function NewsRoom() {
     reader.onload = () => setForm((prev) => ({ ...prev, image: reader.result }))
     reader.readAsDataURL(f)
   }
-  // helper to convert dataURL to Blob
-  const dataURLtoBlob = (dataurl) => {
-    const arr = dataurl.split(',')
-    const mime = arr[0].match(/:(.*?);/)[1]
-    const bstr = atob(arr[1])
-    let n = bstr.length
-    const u8arr = new Uint8Array(n)
-    while (n--) u8arr[n] = bstr.charCodeAt(n)
-    return new Blob([u8arr], { type: mime })
-  }
-
   const saveNews = async (e) => {
     if (e) e.preventDefault();
     if (!form.title.trim()) return
 
     try {
-      // upload headline image if present (data URL)
-      let headlineUrl = form.image || null
-      if (form.image && form.image.startsWith('data:')) {
-        const blob = dataURLtoBlob(form.image)
-        const filename = `news/${Date.now()}_${Math.random().toString(36).slice(2,9)}.jpg`
-        const { error: uploadErr } = await supabase.storage.from('news-images').upload(filename, blob, { upsert: true })
-        if (uploadErr) throw uploadErr
-        const { data: publicUrlData } = supabase.storage.from('news-images').getPublicUrl(filename)
-        headlineUrl = publicUrlData.publicUrl
-      }
-
-      // prepare additional images array (if any) - currently UI doesn't collect them, keep empty
-      const additionalImages = form.additionalImages || []
-
-      // Defensive user_id lookup
-      const user_id = user?.id ?? user?.user_id ?? user?.uuid ?? null;
-      console.log('[DEBUG] Attempting to insert news with user_id:', user_id);
-      if (!user_id) {
-        alert('You must be logged in to post news.');
-        return;
-      }
       const payload = {
         title: form.title,
         description: form.description,
-        user_id,
-        headline_image: headlineUrl,
-        additional_images: additionalImages,
+        headline_image: form.image || null,
+        additional_images: form.additionalImages || [],
         published: true,
-        published_at: new Date().toISOString(),
-        date: new Date().toISOString(),
-        slug: form.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''),
-        metadata: {},
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
       }
 
-      const { data, error } = await supabase.from('news_room').insert([payload]).select('*')
-      if (error) {
-        console.error('[DEBUG] Insert failed:', error);
-        alert('Failed to save news. See console for details. Error: ' + (error.message || error.toString()));
-        // Extra debug: show payload and error
-        console.log('[DEBUG] Payload attempted:', payload);
-        return;
+      const isEdit = Boolean(form.id)
+
+      if (isEdit) {
+        await apiClient.put(`/news/${form.id}`, payload)
+      } else {
+        await apiClient.post('/news', payload)
       }
-      if (!data) {
-        console.error('[DEBUG] Insert returned no data, possible RLS, FK, or DB error.');
-        alert('Insert did not return data. Check RLS, foreign key, and DB.');
-        // Extra debug: show payload
-        console.log('[DEBUG] Payload attempted:', payload);
-        return;
-      }
-      console.log('[DEBUG] Insert success:', data);
-      alert('News inserted successfully!');
+
+      alert('News saved successfully!')
       setShowNewsModal(false);
       setForm({ id: null, title: '', description: '', date: '', image: '' });
       // reload from DB

@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import '../style/reports.css';
 import ConfirmModal from '../components/ConfirmModal';
+import apiClient from '../utils/apiClient';
 
 const sampleReports = [
   {
@@ -52,6 +53,123 @@ function Modal({ open, title, children, onClose }) {
   );
 }
 
+function ComposeForm({ stations, onSend, onClose }) {
+  const [recipientStationId, setRecipientStationId] = useState('');
+  const [officers, setOfficers] = useState([]);
+  const [officersLoading, setOfficersLoading] = useState(false);
+  const [officersError, setOfficersError] = useState('');
+  const [recipientOfficerId, setRecipientOfficerId] = useState('');
+  const [sendToAll, setSendToAll] = useState(false);
+  const [subject, setSubject] = useState('');
+  const [body, setBody] = useState('');
+
+  useEffect(() => {
+    async function loadOfficers() {
+      setOfficers([]);
+      setRecipientOfficerId('');
+      setSendToAll(false);
+      setOfficersError('');
+      if (!recipientStationId) return;
+      setOfficersLoading(true);
+      try {
+        // Call the primary backend endpoint that exists: /api/officers?station_id=ID
+        const res = await apiClient.get(`/officers?station_id=${recipientStationId}`);
+        // Accept multiple response shapes
+        const potential = res?.officers || res?.users || res?.data || res?.rows || res || [];
+        const list = Array.isArray(potential) ? potential : [];
+        setOfficers(list);
+      } catch (e) {
+        // Show a clear error so the UI can indicate why officers are missing
+        // eslint-disable-next-line no-console
+        console.warn('failed to load officers', e && e.message);
+        setOfficers([]);
+        setOfficersError(e && e.message ? String(e.message) : 'Failed to load officers');
+      } finally {
+        setOfficersLoading(false);
+      }
+    }
+    loadOfficers();
+  }, [recipientStationId]);
+
+  return (
+    <div className="composer-form">
+      <div className="composer-fields">
+        <select
+          className="filter-dropdown composer-to"
+          value={recipientStationId}
+          onChange={(e) => setRecipientStationId(e.target.value)}
+        >
+          <option value="">To (Select station)</option>
+          {(stations || []).map((s) => (
+            <option key={s.station_id} value={String(s.station_id)}>
+              {s.station_name}
+            </option>
+          ))}
+        </select>
+
+        <input
+          type="text"
+          className="search-input composer-subject"
+          placeholder="Subject (optional)"
+          value={subject}
+          onChange={(e) => setSubject(e.target.value)}
+        />
+      </div>
+
+      <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+        {officersLoading ? (
+          <div style={{ color: 'var(--muted)' }}>Loading officers...</div>
+        ) : (
+          <>
+            <select
+              className="filter-dropdown"
+              value={recipientOfficerId}
+              onChange={(e) => setRecipientOfficerId(e.target.value)}
+              disabled={sendToAll || (Array.isArray(officers) && officers.length === 0)}
+            >
+              <option value="">{Array.isArray(officers) && officers.length > 0 ? 'Select officer (optional)' : 'No officers found'}</option>
+              {Array.isArray(officers) && officers.map((o) => (
+                <option key={o.user_id || o.id} value={String(o.user_id || o.id)}>{o.full_name || o.name || o.email}</option>
+              ))}
+            </select>
+
+            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+              <input type="checkbox" checked={sendToAll} onChange={(e) => setSendToAll(e.target.checked)} />
+              <span style={{ fontSize: 13, color: 'var(--muted)' }}>Send to all officers</span>
+            </label>
+          </>
+        )}
+          {officersError && <div style={{ color: '#c33', fontSize: 13, marginTop: 8 }}>{officersError}</div>}
+      </div>
+
+      <textarea
+        className="composer-textarea"
+        value={body}
+        onChange={(e) => setBody(e.target.value)}
+        placeholder="Write your message..."
+      />
+
+      <div className="composer-toolbar">
+        <div className="composer-left">
+          <button type="button" className="btn btn-secondary" title="Attach">📎</button>
+          <button type="button" className="btn btn-secondary" title="Emoji">😊</button>
+          <button type="button" className="btn btn-secondary" title="Formatting">A</button>
+        </div>
+        <div className="composer-right">
+          <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
+          <button
+            className="btn btn-primary composer-send"
+            onClick={() => onSend({ recipientStationId, recipientOfficerId, sendToAll, subject, body })}
+            disabled={!recipientStationId || (!sendToAll && !recipientOfficerId) || !body.trim()}
+          >
+            Send
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // Placeholder ReplyForm
 function ReplyForm({ to, onSend, onClose }) {
   const [text, setText] = useState('');
@@ -73,15 +191,82 @@ function ReplyForm({ to, onSend, onClose }) {
 }
 
 export default function Reports() {
-  const [reports, setReports] = useState(sampleReports);
-  const [filteredReports, setFilteredReports] = useState(sampleReports);
+  const [reports, setReports] = useState([]);
+  const [filteredReports, setFilteredReports] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState('recent');
-  const [selectedId, setSelectedId] = useState(sampleReports[0]?.id || null);
+  const [selectedId, setSelectedId] = useState(null);
   const [confirmState, setConfirmState] = useState({ open: false, id: null, type: null });
   const [replyModal, setReplyModal] = useState({ open: false, to: null });
+  const [composeModal, setComposeModal] = useState({ open: false });
+  const [stations, setStations] = useState([]);
+  const [threadMessages, setThreadMessages] = useState([]);
 
   const selected = reports.find(r => r.id === selectedId) || null;
+
+  const formatDate = (isoOrDateString) => {
+    if (!isoOrDateString) return '';
+    const d = new Date(isoOrDateString);
+    if (Number.isNaN(d.getTime())) return String(isoOrDateString);
+    return d.toLocaleString();
+  };
+
+  const loadConversations = async () => {
+    try {
+      const data = await apiClient.get('/conversations');
+      const conversations = data?.conversations || [];
+      const mapped = conversations.map((c) => {
+        const last = c.lastMessage || null;
+        const preview = last?.body ? String(last.body).slice(0, 80) : '';
+        return {
+          id: c.conversationId,
+          conversationId: c.conversationId,
+          name: c.otherStationName || c.stationBName || c.stationAName || 'Station',
+          subject: last?.subject || '(No subject)',
+          preview,
+          date: last?.sent_at || c.updatedAt || null,
+          full: last?.body || '',
+          email: '',
+          read: last ? Boolean(last.is_read) : true,
+        };
+      });
+      setReports(mapped);
+      setFilteredReports(mapped);
+      // Do not auto-select a message on initial load — keep list-only view
+      if (!mapped.find((r) => r.id === selectedId)) {
+        setSelectedId(null);
+      }
+    } catch (e) {
+      setReports([]);
+      setFilteredReports([]);
+      setSelectedId(null);
+    }
+  };
+
+  const loadThread = async (conversationId) => {
+    if (!conversationId) {
+      setThreadMessages([]);
+      return;
+    }
+    try {
+      const data = await apiClient.get(`/conversations/${conversationId}/messages`);
+      setThreadMessages(data?.messages || []);
+    } catch (e) {
+      setThreadMessages([]);
+    }
+  };
+
+  useEffect(() => {
+    loadConversations();
+  }, []);
+
+  useEffect(() => {
+    if (selectedId) {
+      loadThread(selectedId);
+    } else {
+      setThreadMessages([]);
+    }
+  }, [selectedId]);
 
   // Filter logic
   useEffect(() => {
@@ -104,7 +289,9 @@ export default function Reports() {
     // 'all' shows everything
 
     setFilteredReports(filtered);
-    if (!filtered.find(r => r.id === selectedId)) setSelectedId(filtered[0]?.id || null);
+    // If the currently selected item is no longer in the filtered list,
+    // clear selection instead of auto-selecting the first item.
+    if (!filtered.find(r => r.id === selectedId)) setSelectedId(null);
   }, [searchTerm, filterType, reports]);
 
   // Handlers
@@ -112,12 +299,72 @@ export default function Reports() {
   const performConfirm = () => {
     const { id } = confirmState;
     if (!id) return;
-    setReports(prev => prev.filter(r => r.id !== id));
+    if (confirmState.type === 'delete') {
+      apiClient
+        .delete(`/conversations/${id}`)
+        .then(() => loadConversations())
+        .catch(() => loadConversations());
+    }
     if (selectedId === id) setSelectedId(null);
     setConfirmState({ open:false, id:null, type:null });
   };
   const openReply = (report) => setReplyModal({ open:true, to:report });
-  const sendReply = (text) => { console.log('Reply to', replyModal.to.email, text); setReplyModal({ open:false, to:null }); };
+  const sendReply = async (text) => {
+    const conversationId = replyModal?.to?.conversationId || replyModal?.to?.id || null;
+    if (!conversationId) {
+      setReplyModal({ open:false, to:null });
+      return;
+    }
+    try {
+      await apiClient.post(`/conversations/${conversationId}/messages`, { body: text, subject: null });
+      setReplyModal({ open:false, to:null });
+      await loadThread(conversationId);
+      await loadConversations();
+    } catch (e) {
+      setReplyModal({ open:false, to:null });
+    }
+  };
+
+  useEffect(() => {
+    async function loadStations() {
+      try {
+        const data = await apiClient.get('/firestations');
+        const all = data?.stations || [];
+        const me = (() => {
+          try { return JSON.parse(localStorage.getItem('user') || 'null'); } catch (e) { return null; }
+        })();
+        const myStationId = me?.assignedStationId || me?.assigned_station_id || me?.stationInfo?.station_id || null;
+        const filtered = myStationId
+          ? all.filter((s) => String(s.station_id) !== String(myStationId))
+          : all;
+        setStations(filtered);
+      } catch (e) {
+        setStations([]);
+      }
+    }
+
+    if (composeModal.open) {
+      loadStations();
+    }
+  }, [composeModal.open]);
+
+  const sendNewMessage = async ({ recipientStationId, recipientOfficerId, sendToAll, subject, body }) => {
+    try {
+      const payload = {
+        recipientStationId: Number(recipientStationId),
+        recipientOfficerId: recipientOfficerId ? Number(recipientOfficerId) : null,
+        sendToAll: Boolean(sendToAll),
+        subject: subject?.trim() ? subject.trim() : null,
+        body: body,
+      };
+      const res = await apiClient.post('/conversations', payload);
+      setComposeModal({ open: false });
+      console.log('Message sent:', res);
+      await loadConversations();
+    } catch (e) {
+      console.error('Failed to send message:', e);
+    }
+  };
 
   return (
     <div className="reports-page">
@@ -129,6 +376,9 @@ export default function Reports() {
             <div className="inbox-header-content">
               <h2><i className="fa-solid fa-inbox"></i> Inbox</h2>
               <div className="search-and-filter">
+                <button className="btn btn-primary" onClick={() => setComposeModal({ open: true })}>
+                  <i className="fa-solid fa-pen"></i> New Message
+                </button>
                 <div className="search-container">
                   <input
                     type="text"
@@ -169,7 +419,7 @@ export default function Reports() {
                   <div className="item-body">
                     <div className="item-top">
                       <div className="item-name">{r.name}</div>
-                      <div className="item-date">{r.date}</div>
+                      <div className="item-date">{formatDate(r.date)}</div>
                     </div>
                     <div className="item-subject">{r.subject}</div>
                     <div className="item-preview">{r.preview}</div>
@@ -200,12 +450,24 @@ export default function Reports() {
                 </div>
                 <div className="sender-meta">
                   <div className="sender-name">{selected.name}</div>
-                  <div className="sender-email">{selected.email} • {selected.date}</div>
+                  <div className="sender-email">{formatDate(selected.date)}</div>
                 </div>
               </div>
 
               <div className="message-content">
-                {selected.full.split('\n').map((para,i)=><p key={i}>{para}</p>)}
+                {(threadMessages && threadMessages.length > 0
+                  ? threadMessages
+                  : [{ message_id: 'fallback', body: selected.full, sent_at: selected.date }]
+                ).map((m) => (
+                  <p key={m.message_id}>
+                    {String(m.body || '').split('\n').map((para, idx) => (
+                      <span key={idx}>
+                        {para}
+                        <br />
+                      </span>
+                    ))}
+                  </p>
+                ))}
               </div>
 
                           </div>
@@ -226,6 +488,14 @@ export default function Reports() {
 
       <Modal open={replyModal.open} title={replyModal.to ? `Reply to ${replyModal.to.name}`:'Reply'} onClose={()=>setReplyModal({open:false,to:null})}>
         <ReplyForm to={replyModal.to} onSend={sendReply} onClose={()=>setReplyModal({open:false,to:null})} />
+      </Modal>
+
+      <Modal open={composeModal.open} title="New Message" onClose={()=>setComposeModal({open:false})}>
+        <ComposeForm
+          stations={stations}
+          onSend={sendNewMessage}
+          onClose={()=>setComposeModal({open:false})}
+        />
       </Modal>
       
       {/* Empty State */}

@@ -16,8 +16,7 @@ export default function BranchStatus() {
   const fetchStationsReadiness = async () => {
     try {
       setLoading(true);
-
-      const data = await apiClient.get('/stations-readiness-overview');
+      const data = await apiClient.get("/stations-readiness-overview");
       const stationsData = Array.isArray(data) ? data : data?.overview || [];
 
       setStations(stationsData);
@@ -30,45 +29,26 @@ export default function BranchStatus() {
     }
   };
 
-  /* ========================= */
-  /* SUMMARY CALCULATIONS      */
-  /* ========================= */
   const totalStations = stations.length;
-  const readyCount = stations.filter(
-    (s) => s.readinessStatus === "READY"
-  ).length;
-  const notReadyCount = stations.filter(
-    (s) => s.readinessStatus === "NOT_READY"
-  ).length;
-  const partialCount = stations.filter(
-    (s) => s.readinessStatus === "PARTIALLY_READY"
-  ).length;
-  const unknownCount = stations.filter(
-    (s) =>
-      !s.readinessStatus || s.readinessStatus === "UNKNOWN"
-  ).length;
+  const readyCount = stations.filter((s) => s.readinessStatus === "READY").length;
+  const notReadyCount = stations.filter((s) => s.readinessStatus === "NOT_READY").length;
+  const partialCount = stations.filter((s) => s.readinessStatus === "PARTIALLY_READY").length;
+  const unknownCount = stations.filter((s) => !s.readinessStatus || s.readinessStatus === "UNKNOWN").length;
 
   return (
     <div className="status-page">
-      {/* HEADER */}
       <div className="page-header">
         <h1 className="page-title">Station Status Overview</h1>
-        <p className="page-subtitle">
-          City Command Monitoring Panel
-        </p>
+        <p className="page-subtitle">Branch Monitoring Panel</p>
       </div>
 
-      {/* ERROR */}
       {error && (
         <div className="error-box">
           {error}
-          <button onClick={fetchStationsReadiness}>
-            Retry
-          </button>
+          <button onClick={fetchStationsReadiness}>Retry</button>
         </div>
       )}
 
-      {/* SUMMARY DASHBOARD */}
       {!loading && stations.length > 0 && (
         <div className="summary-grid">
           <div className="summary-card">
@@ -129,49 +109,29 @@ export default function BranchStatus() {
 
       <hr className="summary-divider" />
 
-      {/* STATES */}
       {loading ? (
-        <div className="state-message">
-          Loading station readiness data...
-        </div>
+        <div className="state-message">Loading station readiness data...</div>
       ) : stations.length === 0 ? (
-        <div className="state-message">
-          No stations available
-        </div>
+        <div className="state-message">No stations available</div>
       ) : (
         <div className="stations-grid">
           {stations.map((station) => {
-            const status =
-              station.readinessStatus || "UNKNOWN";
-            const readinessPercentage =
-              station.readinessPercentage || 0;
-            const submittedBy =
-              station.lastSubmittedBy || "Unknown";
-            const submittedAt =
-              station.lastReadinessUpdate
-                ? new Date(
-                    station.lastReadinessUpdate
-                  ).toLocaleDateString()
-                : "Never";
+            const status = station.readinessStatus || "UNKNOWN";
+            const readinessPercentage = station.readinessPercentage || 0;
+            const submittedBy = station.lastSubmittedBy || "Unknown";
+            const submittedAt = station.lastReadinessUpdate
+              ? new Date(station.lastReadinessUpdate).toLocaleDateString()
+              : "Never";
 
             return (
-              <div
-                key={station.stationId}
-                className={`station-card ${status.toLowerCase()}`}
-              >
+              <div key={station.stationId} className={`station-card ${status.toLowerCase()}`}>
                 <div className="station-header">
                   <h2>{station.stationName}</h2>
-                  <small>
-                    {station.stationType === "MAIN"
-                      ? "Main Station"
-                      : "Branch Station"}
-                  </small>
+                  <small>{station.stationType === "MAIN" ? "Main Station" : "Branch Station"}</small>
                 </div>
 
                 <div className="station-status">
-                  <span
-                    className={`status-badge ${status.toLowerCase().replace(/_/g, '_')}`}
-                  >
+                  <span className={`status-badge ${status.toLowerCase().replace(/_/g, "_")}`}>
                     {status.replace(/_/g, " ")}
                   </span>
                 </div>
@@ -179,27 +139,16 @@ export default function BranchStatus() {
                 <div className="readiness-info">
                   <div className="readiness-top">
                     <span>Readiness</span>
-                    <strong>
-                      {readinessPercentage}%
-                    </strong>
+                    <strong>{readinessPercentage}%</strong>
                   </div>
 
                   <div className="readiness-bar-container">
-                    <div
-                      className="readiness-bar"
-                      style={{
-                        width: `${readinessPercentage}%`,
-                      }}
-                    />
+                    <div className="readiness-bar" style={{ width: `${readinessPercentage}%` }} />
                   </div>
 
                   <div className="station-meta">
-                    <div>
-                      Last by: {submittedBy}
-                    </div>
-                    <div>
-                      Date: {submittedAt}
-                    </div>
+                    <div>Last by: {submittedBy}</div>
+                    <div>Date: {submittedAt}</div>
                   </div>
                 </div>
               </div>
@@ -208,12 +157,8 @@ export default function BranchStatus() {
         </div>
       )}
 
-      {/* REFRESH BUTTON */}
       <div className="refresh-container">
-        <button
-          className="refresh-button"
-          onClick={fetchStationsReadiness}
-        >
+        <button className="refresh-button" onClick={fetchStationsReadiness}>
           Refresh Data
         </button>
       </div>

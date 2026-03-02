@@ -10,6 +10,9 @@ import fireStationsRoutes from './routes/fireStations.js';
 import readinessRoutes from './routes/readinessRoutes.js';
 import compatibilityRoutes from './routes/compatibilityRoutes.js';
 import firetruckTrackingRoutes from './routes/firetruckTrackingRoutes.js';
+import newsRoutes from './routes/newsRoutes.js';
+import safetyRoutes from './routes/safetyRoutes.js';
+import messageRoutes from './routes/messageRoutes.js';
 import { authenticateToken } from './middleware/auth.js';
 
 dotenv.config();
@@ -128,6 +131,14 @@ io.on('connection', (socket) => {
 // Auth routes (no authentication required)
 app.use('/api', authRoutes);
 
+// News routes (admin only)
+app.use('/api', newsRoutes);
+console.log('News routes mounted at /api/news');
+
+// Safety tips + categories routes (admin only)
+app.use('/api', safetyRoutes);
+console.log('Safety routes mounted at /api/safety-tips and /api/safety-tip-categories');
+
 // Incident routes (authentication required)
 app.use('/api', incidentRoutes);
 
@@ -142,6 +153,9 @@ app.use('/api', firetruckTrackingRoutes);
 
 // Compatibility routes - Old PHP endpoint paths for backward compatibility with mobile apps
 app.use('/api', compatibilityRoutes);
+
+// Messaging routes (conversations + messages)
+app.use('/api', messageRoutes);
 
 app.get('/api/health', async (req, res) => {
   try {

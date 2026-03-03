@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,12 +8,17 @@ import {
   Alert,
   ScrollView,
   TextInput,
+  Animated,
+  Vibration,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
-import { NODE_API_URL } from '../../config';
+import { io as ioClient } from 'socket.io-client/dist/socket.io.js';
+import { NODE_API_URL, TEST_CALLER_PHONE } from '../../config';
+import useTwilioVoice from '../../hooks/useTwilioVoice';
+import { useAuth } from '../../context/AuthContext';
 
 const emergencyContacts = [
   {
@@ -42,6 +47,9 @@ const emergencyContacts = [
   },
 ];
 
+// Call state type
+type CallPhase = 'idle' | 'confirming' | 'locating' | 'sending' | 'dialing' | 'ringing' | 'redirecting' | 'connected' | 'ended' | 'error';
+
 export const EmergencyCallScreen: React.FC = () => {
   const navigation = useNavigation<any>();
   const [showConfirmModal, setShowConfirmModal] = useState(false);
@@ -49,6 +57,170 @@ export const EmergencyCallScreen: React.FC = () => {
   const [showDialModal, setShowDialModal] = useState(false);
   const [dialNumber, setDialNumber] = useState('');
   const [emergencyDescription, setEmergencyDescription] = useState('');
+
+  // Calling UI state
+  const [callPhase, setCallPhase] = useState<CallPhase>('idle');
+  const [showCallingScreen, setShowCallingScreen] = useState(false);
+  const [dispatchedStation, setDispatchedStation] = useState<number | null>(null);
+  const [dispatchedStationName, setDispatchedStationName] = useState<string | null>(null);
+  const [callTimer, setCallTimer] = useState(0);
+  const [callError, setCallError] = useState<string | null>(null);
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const socketRef = useRef<any>(null);
+  const alarmIdRef = useRef<number | null>(null);
+  const voipHangUpRef = useRef<() => void>(() => {});
+
+  // Twilio Voice SDK for VoIP calls — identity + JWT from auth context
+  const { token: jwtToken, user: authUser } = useAuth();
+  const civilianPhone = authUser?.phone || TEST_CALLER_PHONE;
+  const civilianIdentity = `CIV_${civilianPhone.replace(/[^0-9]/g, '')}`;
+  const { status: voipStatus, activeCall, makeCall: voipCall, hangUp: voipHangUp, error: voipError } = useTwilioVoice(civilianIdentity, jwtToken);
+
+  // Keep ref up-to-date so socket closures always have the latest hangUp
+  useEffect(() => { voipHangUpRef.current = voipHangUp; }, [voipHangUp]);
+
+  // Diagnostic: log auth + VoIP state
+  useEffect(() => {
+    console.log(`[EmergencyCall] AUTH: jwtToken=${jwtToken ? 'YES(' + jwtToken.length + ')' : 'NULL'}, user=${authUser?.phone || 'null'}, civilianIdentity=${civilianIdentity}`);
+    console.log(`[EmergencyCall] VOIP: status=${voipStatus}, error=${voipError || 'none'}`);
+  }, [jwtToken, voipStatus, voipError]);
+
+  // Pulse animation for the calling screen
+  useEffect(() => {
+    if (showCallingScreen && (callPhase === 'dialing' || callPhase === 'ringing' || callPhase === 'redirecting')) {
+      const pulse = Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, { toValue: 1.3, duration: 800, useNativeDriver: true }),
+          Animated.timing(pulseAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
+        ])
+      );
+      pulse.start();
+      return () => pulse.stop();
+    }
+  }, [showCallingScreen, callPhase]);
+
+  // Call timer when connected
+  useEffect(() => {
+    if (callPhase === 'connected') {
+      setCallTimer(0);
+      timerRef.current = setInterval(() => setCallTimer(t => t + 1), 1000);
+      return () => { if (timerRef.current) clearInterval(timerRef.current); };
+    } else {
+      if (timerRef.current) clearInterval(timerRef.current);
+    }
+  }, [callPhase]);
+
+  // Watch VoIP activeCall drop — only transition from connected → ended
+  useEffect(() => {
+    if (!activeCall && callPhase === 'connected') {
+      setCallPhase('ended');
+    }
+  }, [activeCall]);
+
+  const formatTimer = (s: number) => {
+    const m = Math.floor(s / 60);
+    const sec = s % 60;
+    return `${m.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
+  };
+
+  // Socket.IO: connect when calling screen opens for failover events
+  useEffect(() => {
+    if (!showCallingScreen) return;
+
+    const socket = ioClient(NODE_API_URL, { transports: ['websocket'] });
+    socketRef.current = socket;
+
+    socket.on('connect', () => {
+      console.log('[Socket] Civilian connected:', socket.id);
+      // If alarmId is already known, join the room right away
+      if (alarmIdRef.current) {
+        socket.emit('join-alarm', { alarmId: alarmIdRef.current });
+      }
+    });
+
+    socket.on('failover-redirect', (data: any) => {
+      console.log('[Failover] Redirecting to:', data.toStationName);
+      // Hang up current Twilio call before transitioning (use ref to avoid stale closure)
+      try { voipHangUpRef.current(); } catch (e) { console.warn('[Failover] hangUp error:', e); }
+      setCallPhase('redirecting' as CallPhase);
+      setDispatchedStation(data.toStationId);
+      setDispatchedStationName(data.toStationName);
+
+      // After 2.5s transition, resume dialing the new station (stays yellow)
+      setTimeout(async () => {
+        setCallPhase('dialing');
+        // Place Twilio VoIP call to the next station (substation or main admin)
+        const newIdentity = data.toStationId === 'main' ? 'ADM_MAIN' : `ADM_SUB_${data.toStationId}`;
+        console.log(`[Failover] Calling new station: ${newIdentity}`);
+        try {
+          const call = await voipCall(newIdentity);
+          if (call) setCallPhase('ringing');
+          console.log('[Failover] New call result:', !!call);
+        } catch (e) {
+          console.warn('[Failover] New Twilio call failed:', e);
+          setCallPhase('ringing');
+        }
+      }, 2500);
+    });
+
+    // A station accepted the call — NOW go green
+    socket.on('call-accepted', (data: any) => {
+      console.log('[Socket] Call accepted by station:', data.stationName || data.stationId);
+      if (data.stationName) setDispatchedStationName(data.stationName);
+      setCallPhase('connected');
+    });
+
+    socket.on('failover-exhausted', () => {
+      console.log('[Failover] No more stations available');
+      setCallPhase('error');
+      setCallError('No answer from any station. Please try again.');
+    });
+
+    return () => {
+      socket.disconnect();
+      socketRef.current = null;
+    };
+  }, [showCallingScreen]);
+
+  const getCallPhaseText = (): string => {
+    switch (callPhase) {
+      case 'locating': return 'Getting your location...';
+      case 'sending': return 'Sending alert to station...';
+      case 'dialing': return 'Dialing nearest station...';
+      case 'ringing': return 'Ringing...';
+      case 'redirecting': return `Redirecting to ${dispatchedStationName || 'another station'}...`;
+      case 'connected': return 'Connected';
+      case 'ended': return 'Call Ended';
+      case 'error': return callError || 'Something went wrong';
+      default: return '';
+    }
+  };
+
+  const handleEndCall = () => {
+    if (activeCall) {
+      voipHangUp();
+    }
+    // Tell backend to cancel failover and dismiss all station modals
+    if (socketRef.current && alarmIdRef.current) {
+      socketRef.current.emit('call-cancelled', { alarmId: alarmIdRef.current });
+      console.log('[EndCall] Emitted call-cancelled for alarm', alarmIdRef.current);
+    }
+    // Disconnect socket
+    if (socketRef.current) {
+      socketRef.current.disconnect();
+      socketRef.current = null;
+    }
+    alarmIdRef.current = null;
+    setCallPhase('ended');
+    setTimeout(() => {
+      setShowCallingScreen(false);
+      setCallPhase('idle');
+      setDispatchedStation(null);
+      setDispatchedStationName(null);
+      setCallError(null);
+    }, 1500);
+  };
 
   const handleEmergencyCall = (contact: any) => {
     setSelectedEmergency(contact);
@@ -62,58 +234,63 @@ export const EmergencyCallScreen: React.FC = () => {
   };
 
   const handleDial = async () => {
-    await sendAlarmWithCurrentLocation();
-    Alert.alert(
-      'Emergency Call',
-      `Calling ${selectedEmergency.name} at ${selectedEmergency.number}...`,
-      [
-        { text: 'End Call', style: 'destructive' },
-        { text: 'Keep Connected', style: 'default' }
-      ]
-    );
+    setShowDialModal(false);
+    initiateEmergencyCall();
   };
 
   const handleQuickEmergency = () => {
+    setCallPhase('confirming');
+    setShowCallingScreen(false);
     Alert.alert(
-      'Quick Emergency',
-      'Are you sure you want to start an emergency call to the nearest fire station?',
+      '🚨 Emergency Confirmation',
+      'Are you sure this is an actual emergency?\n\nThis will immediately alert the nearest fire station and initiate a call.',
       [
-        { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Yes, Call',
-          style: 'default',
-          onPress: () => {
-            // One-tap flow after confirmation: navigate to CallTest and let it auto-run the KNN + VoIP pipeline once
-            navigation.navigate('CallTest', { autoStart: true });
-          },
+          text: 'Cancel',
+          style: 'cancel',
+          onPress: () => setCallPhase('idle'),
+        },
+        {
+          text: 'YES, CALL NOW',
+          style: 'destructive',
+          onPress: () => initiateEmergencyCall(),
         },
       ],
     );
   };
 
-  const sendAlarmWithCurrentLocation = async () => {
+  const initiateEmergencyCall = async () => {
+    Vibration.vibrate([0, 100, 50, 100]);
+    setShowCallingScreen(true);
+    setCallPhase('locating');
+    setCallError(null);
+
     try {
+      // Step 1: Get location
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert(
-          'Location Permission Required',
-          'Please enable location access so we can send your location to the nearest fire station.'
-        );
+        setCallPhase('error');
+        setCallError('Location permission denied. Enable location to proceed.');
         return;
       }
 
       const position = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.High,
       });
-
       const latitude = position.coords.latitude;
       const longitude = position.coords.longitude;
 
-      const phoneNumber = '9997778888';
+      // Step 2: Send alarm
+      setCallPhase('sending');
+      const phoneNumber = civilianPhone;
 
       const response = await fetch(`${NODE_API_URL}/api/enduser/create-alarm`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'ngrok-skip-browser-warning': 'true',
+          ...(jwtToken ? { Authorization: `Bearer ${jwtToken}` } : {}),
+        },
         body: JSON.stringify({
           phoneNumber,
           latitude,
@@ -128,13 +305,60 @@ export const EmergencyCallScreen: React.FC = () => {
       const data = await response.json();
 
       if (!response.ok) {
-        Alert.alert('Emergency Error', data.message || 'Failed to create alarm.');
+        setCallPhase('error');
+        setCallError(data.message || 'Failed to create alarm.');
         return;
       }
 
       console.log('Alarm created from emergency call:', data);
+      alarmIdRef.current = data.alarmId || null;
+      setDispatchedStation(data.dispatchedStationId || null);
+      setDispatchedStationName(data.dispatchedStationName || null);
+
+      // Join the alarm socket room so we receive failover-redirect events
+      if (socketRef.current?.connected && data.alarmId) {
+        socketRef.current.emit('join-alarm', { alarmId: data.alarmId });
+        console.log(`[Socket] Joined alarm room: alarm-${data.alarmId}`);
+      }
+
+      // Step 3: Dial the station via VoIP
+      if (data.dispatchedStationId) {
+        setCallPhase('dialing');
+        const stationIdentity = `ADM_SUB_${data.dispatchedStationId}`;
+        console.log(`[VoIP] Calling station identity: ${stationIdentity}, voipStatus: ${voipStatus}, voipError: ${voipError}`);
+
+        // Always attempt the call — makeCall checks voiceRef internally.
+        // The voipStatus closure may be stale, so don't gate on it.
+        try {
+          const call = await voipCall(stationIdentity);
+          if (call) {
+            console.log('[VoIP] Call initiated successfully');
+            setCallPhase('ringing');
+          } else {
+            // SDK not ready yet — retry once after 2s
+            console.warn('[VoIP] First attempt returned null, retrying in 2s...');
+            setCallPhase('ringing');
+            setTimeout(async () => {
+              try {
+                const retryCall = await voipCall(stationIdentity);
+                console.log('[VoIP] Retry result:', !!retryCall);
+              } catch (retryErr) {
+                console.warn('[VoIP] Retry failed:', retryErr);
+              }
+            }, 2000);
+          }
+        } catch (err: any) {
+          console.error('[VoIP] Call failed:', err);
+          setCallPhase('ringing');
+        }
+      } else {
+        setCallPhase('error');
+        setCallError('No station available to dispatch. Please try again.');
+      }
     } catch (err: any) {
-      Alert.alert('Emergency Error', err?.message || 'Failed to send your location.');
+      console.error('Emergency call error:', err);
+      setCallPhase('error');
+      setCallError(err?.message || 'Network error. Check your connection.');
     }
   };
 
@@ -207,17 +431,21 @@ export const EmergencyCallScreen: React.FC = () => {
           <Text style={styles.quickEmergencySubtext}>Tap for immediate assistance</Text>
         </TouchableOpacity>
 
-        {/* Developer: WebRTC Test Entry */}
-        <TouchableOpacity
-          style={[styles.quickEmergencyButton, { backgroundColor: '#1976D2' }]}
-          onPress={() => navigation.navigate('CallTest')}
-        >
-          <View style={styles.quickEmergencyIcon}>
-            <Ionicons name="call" size={32} color="#fff" />
+        {/* VoIP Active Call Banner */}
+        {activeCall && (
+          <View style={{ backgroundColor: '#28a745', borderRadius: 12, padding: 16, marginHorizontal: 16, marginBottom: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <View>
+              <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>On VoIP Call</Text>
+              <Text style={{ color: '#ffffffcc', fontSize: 13 }}>Connected to {dispatchedStationName || 'fire station'}</Text>
+            </View>
+            <TouchableOpacity
+              onPress={voipHangUp}
+              style={{ backgroundColor: '#dc3545', borderRadius: 8, paddingHorizontal: 16, paddingVertical: 10 }}
+            >
+              <Text style={{ color: '#fff', fontWeight: 'bold' }}>Hang Up</Text>
+            </TouchableOpacity>
           </View>
-          <Text style={styles.quickEmergencyText}>WEBRTC CALL TEST</Text>
-          <Text style={styles.quickEmergencySubtext}>For development: sends SDP offer to station</Text>
-        </TouchableOpacity>
+        )}
 
         {/* Emergency Contacts */}
         <View style={styles.section}>
@@ -243,30 +471,6 @@ export const EmergencyCallScreen: React.FC = () => {
           ))}
         </View>
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Developer: KNN Dispatch Test</Text>
-          <TouchableOpacity
-            style={[styles.quickEmergencyButton, { backgroundColor: '#5D4037', marginTop: 12 }]}
-            onPress={handleKnnTest101}
-          >
-            <View style={styles.quickEmergencyIcon}>
-              <Ionicons name="locate" size={32} color="#fff" />
-            </View>
-            <Text style={styles.quickEmergencyText}>KNN TEST 13 NEAR STATION 101</Text>
-            <Text style={styles.quickEmergencySubtext}>Send fixed coordinates at Station 101</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.quickEmergencyButton, { backgroundColor: '#6D4C41', marginTop: 12 }]}
-            onPress={handleKnnTest102}
-          >
-            <View style={styles.quickEmergencyIcon}>
-              <Ionicons name="locate" size={32} color="#fff" />
-            </View>
-            <Text style={styles.quickEmergencyText}>KNN TEST 13 NEAR STATION 103</Text>
-            <Text style={styles.quickEmergencySubtext}>Send fixed coordinates at Station 103</Text>
-          </TouchableOpacity>
-        </View>
 
         {/* Emergency Tips */}
         <View style={styles.section}>
@@ -289,6 +493,93 @@ export const EmergencyCallScreen: React.FC = () => {
           </View>
         </View>
       </ScrollView>
+
+      {/* ── Full-Screen Calling UI ────────────────────────────── */}
+      <Modal
+        visible={showCallingScreen}
+        animationType="slide"
+        onRequestClose={handleEndCall}
+      >
+        <View style={callingStyles.container}>
+          {/* Top area */}
+          <View style={callingStyles.topArea}>
+            <Text style={callingStyles.callingLabel}>
+              {callPhase === 'connected' ? 'CONNECTED' : callPhase === 'redirecting' ? 'REDIRECTING...' : 'EMERGENCY CALL'}
+            </Text>
+            <Text style={callingStyles.stationName}>
+              {dispatchedStationName || (dispatchedStation ? `Fire Station #${dispatchedStation}` : 'Nearest Fire Station')}
+            </Text>
+            <Text style={callingStyles.phaseText}>{getCallPhaseText()}</Text>
+            {callPhase === 'connected' && (
+              <Text style={callingStyles.timerText}>{formatTimer(callTimer)}</Text>
+            )}
+          </View>
+
+          {/* Center — pulsing icon */}
+          <View style={callingStyles.centerArea}>
+            <Animated.View style={[
+              callingStyles.pulseCircleOuter,
+              { transform: [{ scale: pulseAnim }] },
+              callPhase === 'connected' && { backgroundColor: 'rgba(76,175,80,0.15)' },
+              callPhase === 'redirecting' && { backgroundColor: 'rgba(255,152,0,0.15)' },
+              callPhase === 'ended' && { backgroundColor: 'rgba(158,158,158,0.15)' },
+              callPhase === 'error' && { backgroundColor: 'rgba(229,57,53,0.15)' },
+            ]}>
+              <View style={[
+                callingStyles.pulseCircleInner,
+                callPhase === 'connected' && { backgroundColor: '#4CAF50' },
+                callPhase === 'redirecting' && { backgroundColor: '#FF9800' },
+                callPhase === 'ended' && { backgroundColor: '#9E9E9E' },
+                callPhase === 'error' && { backgroundColor: '#E53935' },
+              ]}>
+                <Ionicons
+                  name={
+                    callPhase === 'error' ? 'alert-circle' :
+                    callPhase === 'ended' ? 'call' :
+                    callPhase === 'connected' ? 'call' :
+                    'call-outline'
+                  }
+                  size={48}
+                  color="#fff"
+                />
+              </View>
+            </Animated.View>
+
+            {(callPhase === 'locating' || callPhase === 'sending') && (
+              <Text style={callingStyles.subPhaseText}>Please wait...</Text>
+            )}
+
+            {callPhase === 'error' && (
+              <TouchableOpacity
+                style={callingStyles.retryButton}
+                onPress={() => { setShowCallingScreen(false); setCallPhase('idle'); }}
+              >
+                <Text style={callingStyles.retryText}>Dismiss</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {/* Bottom — hang up */}
+          <View style={callingStyles.bottomArea}>
+            {callPhase !== 'error' && callPhase !== 'ended' && (
+              <TouchableOpacity style={callingStyles.hangUpButton} onPress={handleEndCall}>
+                <Ionicons name="call" size={32} color="#fff" style={{ transform: [{ rotate: '135deg' }] }} />
+              </TouchableOpacity>
+            )}
+            {callPhase !== 'error' && callPhase !== 'ended' && (
+              <Text style={callingStyles.hangUpLabel}>End Call</Text>
+            )}
+            {callPhase === 'ended' && (
+              <TouchableOpacity
+                style={[callingStyles.hangUpButton, { backgroundColor: '#666' }]}
+                onPress={() => { setShowCallingScreen(false); setCallPhase('idle'); }}
+              >
+                <Ionicons name="close" size={32} color="#fff" />
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+      </Modal>
 
       {/* Confirmation Modal */}
       <Modal
@@ -656,5 +947,111 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     marginLeft: 8,
+  },
+});
+
+const callingStyles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#1a1a2e',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 60,
+    paddingHorizontal: 24,
+  },
+  topArea: {
+    alignItems: 'center',
+    marginTop: 40,
+  },
+  callingLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#ffffff80',
+    letterSpacing: 2,
+    textTransform: 'uppercase',
+    marginBottom: 12,
+  },
+  stationName: {
+    fontSize: 26,
+    fontWeight: '700',
+    color: '#fff',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  phaseText: {
+    fontSize: 16,
+    color: '#ffffffcc',
+    marginBottom: 4,
+  },
+  timerText: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#4CAF50',
+    marginTop: 8,
+    fontVariant: ['tabular-nums'],
+  },
+  centerArea: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pulseCircleOuter: {
+    width: 160,
+    height: 160,
+    borderRadius: 80,
+    backgroundColor: 'rgba(229, 57, 53, 0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  pulseCircleInner: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: '#E53935',
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 8,
+    shadowColor: '#E53935',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+  },
+  subPhaseText: {
+    fontSize: 14,
+    color: '#ffffff60',
+    marginTop: 20,
+  },
+  retryButton: {
+    marginTop: 24,
+    backgroundColor: '#ffffff20',
+    borderRadius: 12,
+    paddingHorizontal: 32,
+    paddingVertical: 12,
+  },
+  retryText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  bottomArea: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  hangUpButton: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: '#E53935',
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 6,
+    shadowColor: '#E53935',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+  },
+  hangUpLabel: {
+    color: '#ffffff80',
+    fontSize: 14,
+    marginTop: 12,
   },
 });

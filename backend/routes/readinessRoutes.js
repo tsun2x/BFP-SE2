@@ -128,7 +128,7 @@ router.get('/stations-readiness-overview', authenticateToken, async (req, res) =
     // Fetch stations, then latest readiness per station
     const { data: stations, error: stationsErr } = await supabase
       .from('fire_stations')
-      .select('station_id, station_name')
+      .select('station_id, station_name, station_type')
       .order('station_name', { ascending: true });
 
     if (stationsErr) {
@@ -157,6 +157,7 @@ router.get('/stations-readiness-overview', authenticateToken, async (req, res) =
       overview.push({
         stationId: s.station_id,
         stationName: s.station_name,
+        stationType: s.station_type === 'Main' ? 'MAIN' : 'BRANCH',
         readinessStatus: rec ? rec.status : 'UNKNOWN',
         readinessPercentage: rec ? rec.readiness_percentage : 0,
         lastSubmittedBy: 'N/A',

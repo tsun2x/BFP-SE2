@@ -1,13 +1,79 @@
 import express from 'express';
 import { supabase } from '../supabaseClient.js';
 import { authenticateToken } from '../middleware/auth.js';
+import twilioClient from '../config/twilioClient.js';
+import { acceptIncident, startFailover, getRankedStations, cancelFailover } from '../services/dispatchService.js';
+import { getOnlineStationIds } from '../services/onlineStations.js';
 
 const router = express.Router();
+
+// ── Haversine distance (km) between two lat/lng pairs ───────────────
+function haversineKm(lat1, lon1, lat2, lon2) {
+  const toRad = (v) => (v * Math.PI) / 180;
+  const R = 6371; // Earth radius in km
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+const ensurePublicBaseUrl = () => {
+  const url = process.env.PUBLIC_BASE_URL;
+  if (!url) throw new Error('PUBLIC_BASE_URL is required for Twilio webhooks (set it to your ngrok/public URL)');
+  return url.replace(/\/$/, ''); // trim trailing slash
+};
+
+const buildQueueName = (stationId) => `station-${stationId}`;
+
+// Twilio: enqueue call for station
+router.get('/twilio/station-queue-twiml', async (req, res) => {
+  try {
+    const { stationId, alarmId, phone, lat, lon } = req.query;
+    if (!stationId) return res.status(400).send('stationId is required');
+
+    const queue = buildQueueName(stationId);
+    // Simple hold music twimlet; replace if desired
+    const waitUrl = 'http://twimlets.com/holdmusic?Bucket=com.twilio.music.classical';
+
+    const twiml = `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Enqueue waitUrl="${waitUrl}">
+    ${queue}
+  </Enqueue>
+  <Say voice="alice">Emergency call from ${phone || 'unknown caller'} latitude ${lat || 'n'} longitude ${lon || 'n'} alarm ${alarmId || ''}</Say>
+</Response>`;
+    res.type('text/xml').send(twiml);
+  } catch (err) {
+    console.error('station-queue-twiml error:', err);
+    res.status(500).send('Server error');
+  }
+});
+
+// Twilio: dequeue for station agents (station phone/browser hits this)
+router.get('/twilio/station-queue-answer', async (req, res) => {
+  try {
+    const { stationId } = req.query;
+    if (!stationId) return res.status(400).send('stationId is required');
+    const queue = buildQueueName(stationId);
+    const twiml = `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Dial>
+    <Queue>${queue}</Queue>
+  </Dial>
+</Response>`;
+    res.type('text/xml').send(twiml);
+  } catch (err) {
+    console.error('station-queue-answer error:', err);
+    res.status(500).send('Server error');
+  }
+});
 
 // Create a new incident/alarm
 // NOTE: authentication temporarily disabled for debugging create-incident errors
 // Remove the `authenticateToken` middleware to allow reproducing errors from the frontend
-router.post('/create-incident', async (req, res) => {
+const createIncidentHandler = async (req, res) => {
   try {
     // Debug logging: print authorization, authenticated user, and incoming body
     try {
@@ -153,16 +219,137 @@ router.post('/create-incident', async (req, res) => {
         console.error('Error emitting new-incident event:', emitErr);
       }
 
-      res.status(201).json({
-        message: 'Incident created successfully',
-        alarmId,
-        callerId,
-        status: 'Pending Dispatch',
-        coordinates: {
-          latitude,
-          longitude
+    // ── 5) KNN: find nearest READY station ──────────────────────────
+    let dispatchedStationId = null;
+    let stationName = null;
+    let stationPhone = null;
+
+    try {
+      const forceStationId = req.body.forceStationId; // dev-only override
+
+      // Fetch all stations
+      const { data: stations, error: stErr } = await supabase
+        .from('fire_stations')
+        .select('station_id, station_name, latitude, longitude, contact_number');
+
+      if (stErr) throw stErr;
+
+      if (stations && stations.length > 0) {
+        // Optionally check readiness — skip stations that are NOT_READY
+        const { data: readinessRows } = await supabase
+          .from('station_readiness')
+          .select('station_id, status')
+          .order('submitted_at', { ascending: false });
+
+        // Build map: station_id → latest readiness status
+        const readinessMap = new Map();
+        (readinessRows || []).forEach((r) => {
+          if (!readinessMap.has(r.station_id)) readinessMap.set(r.station_id, r.status);
+        });
+
+        // Get currently online station IDs
+        const onlineIds = getOnlineStationIds();
+        console.log(`[KNN] Online stations: [${[...onlineIds].join(', ')}]`);
+
+        // Score each station by distance, filter out NOT_READY unless forceStationId
+        const allEligible = stations
+          .filter((s) => {
+            if (forceStationId) return s.station_id === Number(forceStationId);
+            const rs = readinessMap.get(s.station_id);
+            // Allow if no readiness record yet (new station) or READY/PARTIALLY_READY
+            return !rs || rs !== 'NOT_READY';
+          })
+          .map((s) => ({
+            ...s,
+            distance: haversineKm(
+              parseFloat(latitude),
+              parseFloat(longitude),
+              parseFloat(s.latitude),
+              parseFloat(s.longitude)
+            ),
+          }))
+          .sort((a, b) => a.distance - b.distance);
+
+        // Prefer online stations; fall back to all eligible if none are online
+        const onlineEligible = allEligible.filter((s) => onlineIds.has(s.station_id));
+        const scored = onlineEligible.length > 0 ? onlineEligible : allEligible;
+        if (onlineEligible.length > 0) {
+          console.log(`[KNN] Dispatching from ${onlineEligible.length} ONLINE station(s)`);
+        } else {
+          console.warn(`[KNN] No online stations — falling back to all ${allEligible.length} eligible station(s)`);
         }
-      });
+
+        if (scored.length > 0) {
+          const nearest = scored[0];
+          dispatchedStationId = nearest.station_id;
+          stationName = nearest.station_name || null;
+          stationPhone = nearest.contact_number || null;
+          console.log(
+            `[KNN] Nearest station: ${nearest.station_name} (id=${nearest.station_id}, dist=${nearest.distance.toFixed(2)}km, phone=${stationPhone})`
+          );
+
+          // Update alarm with assigned station
+          await supabase
+            .from('alarms')
+            .update({ assigned_station_id: dispatchedStationId })
+            .eq('alarm_id', alarmId);
+
+          // Notify the assigned station AND main admin via Socket.IO rooms
+          const io = req.app.get('io');
+          if (io) {
+            const incidentPayload = {
+              alarmId,
+              callerId,
+              phoneNumber,
+              firstName: firstName || null,
+              lastName: lastName || null,
+              incidentType: incidentType || null,
+              alarmLevel: alarmLevelEnum,
+              location: location || null,
+              narrative: narrative || null,
+              coordinates: { latitude, longitude },
+              assignedStationId: dispatchedStationId,
+              stationName: nearest.station_name,
+            };
+            io.to(`station-${dispatchedStationId}`).emit('incoming-incident', incidentPayload);
+          }
+
+          // Start failover timer: if station doesn't accept within 20s, reassign
+          startFailover(alarmId, dispatchedStationId, scored, req.app.get('io'), {
+            callerId,
+            phoneNumber,
+            firstName,
+            lastName,
+            incidentType,
+            alarmLevel: alarmLevelEnum,
+            location,
+            narrative,
+            coordinates: { latitude, longitude },
+          });
+
+          // VoIP call will be added later when mobile app has a
+          // custom dev build with the native Twilio SDK.
+          // For now, the socket 'incoming-incident' event (above)
+          // triggers the incoming call modal in the admin browser.
+
+        } else {
+          console.warn('[KNN] No eligible stations found');
+        }
+      }
+    } catch (knnErr) {
+      console.error('[KNN] Station lookup error:', knnErr);
+    }
+
+    res.status(201).json({
+      message: 'Alarm created and nearest station notified',
+      alarmId,
+      dispatchedStationId,
+      dispatchedStationName: stationName || null,
+      coordinates: {
+        latitude,
+        longitude,
+      },
+    });
   } catch (error) {
     // Log full error object for debugging
     console.error('Create incident error:', error);
@@ -174,6 +361,138 @@ router.post('/create-incident', async (req, res) => {
       message: 'Failed to create incident',
       error: (error && error.message) || String(error)
     });
+  }
+};
+
+// Register on both paths so civilian app (/enduser/create-alarm) and admin (/create-incident) both work
+router.post('/create-incident', createIncidentHandler);
+router.post('/enduser/create-alarm', createIncidentHandler);
+
+// ── Accept incident (atomic lock — first-accept wins) ───────────────
+router.post('/incidents/:alarmId/accept', authenticateToken, async (req, res) => {
+  try {
+    const { alarmId } = req.params;
+    const stationId = req.body.stationId || req.user.assignedStationId;
+    const userId = req.user.id;
+    console.log(`[AcceptAPI] alarmId=${alarmId} stationId=${stationId} userId=${userId}`);
+
+    if (!stationId) {
+      return res.status(400).json({ message: 'stationId is required' });
+    }
+
+    const isMainAdmin = stationId === 'main';
+    const numericStationId = isMainAdmin ? null : Number(stationId);
+    const result = await acceptIncident(Number(alarmId), numericStationId, userId);
+
+    if (!result.success) {
+      return res.status(409).json({ message: result.reason });
+    }
+
+    // Notify all clients that this incident was accepted
+    const io = req.app.get('io');
+    if (io) {
+      io.emit('incident-accepted', {
+        alarmId: Number(alarmId),
+        stationId: isMainAdmin ? 'main' : Number(stationId),
+        acceptedBy: userId,
+      });
+
+      // Look up station name for the civilian app
+      let stationName = null;
+      if (isMainAdmin) {
+        stationName = 'Central Fire Station (Main)';
+      } else {
+        try {
+          const { data: stationRow } = await supabase
+            .from('fire_stations')
+            .select('station_name')
+            .eq('station_id', Number(stationId))
+            .single();
+          stationName = stationRow?.station_name || null;
+        } catch (_) {}
+      }
+
+      // Tell the civilian mobile app that a station picked up
+      io.to(`alarm-${alarmId}`).emit('call-accepted', {
+        alarmId: Number(alarmId),
+        stationId: isMainAdmin ? 'main' : Number(stationId),
+        stationName,
+      });
+      console.log(`[AcceptAPI] Emitted call-accepted to alarm-${alarmId} (station ${stationId} / ${stationName})`);
+    }
+
+    res.json({ message: 'Incident accepted', alarm: result.alarm });
+  } catch (error) {
+    console.error('Accept incident error:', error);
+    res.status(500).json({ message: 'Failed to accept incident', error: error.message });
+  }
+});
+
+// ── Reject / decline incident (triggers immediate failover) ─────────
+router.post('/incidents/:alarmId/reject', authenticateToken, async (req, res) => {
+  try {
+    const { alarmId } = req.params;
+    const stationId = req.body.stationId || req.user.assignedStationId;
+
+    // Cancel existing failover and trigger reassignment immediately
+    cancelFailover(Number(alarmId));
+
+    // Fetch alarm coordinates for re-ranking
+    const { data: alarm } = await supabase
+      .from('alarms')
+      .select('alarm_id, user_latitude, user_longitude, status')
+      .eq('alarm_id', alarmId)
+      .single();
+
+    if (!alarm || alarm.status !== 'Pending Dispatch') {
+      return res.status(409).json({ message: 'Incident is no longer pending' });
+    }
+
+    // Get ranked stations excluding the rejecting station
+    const ranked = await getRankedStations(alarm.user_latitude, alarm.user_longitude);
+    const remaining = ranked.filter((s) => s.station_id !== Number(stationId));
+
+    if (remaining.length === 0) {
+      return res.status(200).json({ message: 'No other stations available for reassignment' });
+    }
+
+    const nextStation = remaining[0];
+
+    // Reassign
+    await supabase
+      .from('alarms')
+      .update({ assigned_station_id: nextStation.station_id })
+      .eq('alarm_id', alarmId);
+
+    await supabase.from('alarm_response_log').insert([{
+      alarm_id: Number(alarmId),
+      action_type: 'Initial Dispatch',
+      details: `Rejected by station ${stationId}. Reassigned to station ${nextStation.station_id} (${nextStation.station_name})`,
+      performed_by_user_id: req.user.id || null,
+    }]);
+
+    // Notify new station
+    const io = req.app.get('io');
+    if (io) {
+      io.to(`station-${nextStation.station_id}`).emit('incoming-incident', {
+        alarmId: Number(alarmId),
+        assignedStationId: nextStation.station_id,
+        stationName: nextStation.station_name,
+        failover: true,
+      });
+    }
+
+    // Start failover timer for the new station
+    startFailover(Number(alarmId), nextStation.station_id, remaining, io);
+
+    res.json({
+      message: 'Incident rejected, reassigned to next station',
+      nextStationId: nextStation.station_id,
+      nextStationName: nextStation.station_name,
+    });
+  } catch (error) {
+    console.error('Reject incident error:', error);
+    res.status(500).json({ message: 'Failed to reject incident', error: error.message });
   }
 });
 

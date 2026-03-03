@@ -1,4 +1,5 @@
 import express from 'express';
+import bcrypt from 'bcrypt';
 import { supabase } from '../supabaseClient.js';
 
 const router = express.Router();
@@ -13,47 +14,89 @@ const router = express.Router();
 // MOBILE APP ENDPOINTS - Compatibility Layer (OLD PHP Paths)
 // ============================================================
 
-// POST /api/register_start.php - End-user registration (phone-based)
+// POST /api/register_start.php - legacy path, delegates to /enduser/register
 router.post('/register_start.php', async (req, res) => {
   try {
-    const { phone_number, first_name, last_name } = req.body;
+    console.log('[register_start.php] Body:', req.body);
+    req.url = '/enduser/register';
+    return router.handle(req, res);
+  } catch (error) {
+    console.error('Register error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Registration failed: ' + error.message
+    });
+  }
+});
 
-    if (!phone_number) {
+router.post('/enduser/register', async (req, res) => {
+  try {
+    console.log('[enduser/register] Body:', req.body);
+    const {
+      phone_number,
+      phone,
+      first_name,
+      last_name,
+      middle_name,
+      email,
+      gmail,
+      password
+    } = req.body;
+
+    const phoneValue = phone_number || phone;
+
+    if (!phoneValue) {
       return res.status(400).json({
         success: false,
         error: 'Phone number is required'
       });
     }
 
-    // Check if user already exists
     const { data: existingUser, error: existingErr } = await supabase
       .from('users')
       .select('user_id')
-      .eq('phone_number', phone_number)
+      .eq('phone_number', phoneValue)
       .limit(1);
 
     if (existingErr) throw existingErr;
 
+    const fullName = `${first_name || 'User'} ${last_name || ''}`.trim();
+
     if (existingUser && existingUser.length > 0) {
+      const userId = existingUser[0].user_id;
+      const { error: updateErr } = await supabase
+        .from('users')
+        .update({
+          first_name: first_name || 'User',
+          last_name: last_name || '',
+          middle_name: middle_name || null,
+          full_name: fullName,
+          email: gmail || email || null
+        })
+        .eq('user_id', userId);
+
+      if (updateErr) throw updateErr;
+
       return res.status(200).json({
         success: true,
         message: 'User already registered',
-        user_id: existingUser[0].user_id
+        user_id: userId
       });
     }
 
-    const fullName = `${first_name || 'User'} ${last_name || ''}`.trim();
     const { data: result, error: insertErr } = await supabase
       .from('users')
       .insert([
         {
           first_name: first_name || 'User',
           last_name: last_name || '',
+          middle_name: middle_name || null,
           full_name: fullName,
-          phone_number,
-          password: 'temp_' + Date.now(),
+          phone_number: phoneValue,
+          id_number: phoneValue,
+          password: password ? await bcrypt.hash(password, 10) : 'temp_' + Date.now(),
           role: 'end_user',
-          email: `mobile_${Date.now()}@bfp.gov`
+          email: gmail || email || `mobile_${Date.now()}@bfp.gov`
         }
       ])
       .select('user_id')
@@ -71,46 +114,139 @@ router.post('/register_start.php', async (req, res) => {
   }
 });
 
-// POST /api/verify_phone_otp.php - OTP verification (stub - basic implementation)
+// POST /api/verify_phone_otp.php - OTP verification (mobile uses user_id + code)
 router.post('/verify_phone_otp.php', async (req, res) => {
   try {
-    const { phone_number, otp } = req.body;
+    const { phone_number, phone, otp, code, user_id } = req.body;
 
-    if (!phone_number || !otp) {
+    const phoneValue = phone_number || phone;
+    const otpValue = otp || code;
+
+    if ((!phoneValue && !user_id) || !otpValue) {
       return res.status(400).json({
         success: false,
-        error: 'Phone number and OTP are required'
+        error: 'Phone/user and OTP are required'
       });
     }
 
-    // For now, accept any OTP (in production, validate against stored OTP)
-    // This is a placeholder - implement real OTP logic in production
-    if (otp.length < 4) {
-      return res.status(400).json({
-        success: false,
-        error: 'Invalid OTP'
-      });
+    // Basic lookup by user_id or phone_number
+    let query = supabase.from('users').select('user_id, full_name');
+    if (user_id) {
+      query = query.eq('user_id', user_id);
+    } else {
+      query = query.eq('phone_number', phoneValue).limit(1);
     }
 
-    const { data: user, error: userErr } = await supabase
-      .from('users')
-      .select('user_id, full_name')
-      .eq('phone_number', phone_number)
-      .limit(1);
-
+    const { data: user, error: userErr } = await query;
     if (userErr) throw userErr;
 
-    if (!user || user.length === 0) {
+    const record = Array.isArray(user) ? user[0] : user;
+    if (!record) {
       return res.status(404).json({ success: false, error: 'User not found' });
     }
 
-    res.json({ success: true, message: 'OTP verified successfully', user_id: user[0].user_id, full_name: user[0].full_name });
+    // Stub: accept any OTP >= 4 chars
+    if (String(otpValue).length < 4) {
+      return res.status(400).json({ success: false, error: 'Invalid OTP' });
+    }
+
+    res.json({ success: true, message: 'OTP verified successfully', user_id: record.user_id, full_name: record.full_name });
   } catch (error) {
     console.error('OTP verification error:', error);
     res.status(500).json({
       success: false,
       error: 'OTP verification failed: ' + error.message
     });
+  }
+});
+
+router.post('/enduser/verify-otp', async (req, res) => {
+  try {
+    const { phone_number, phone, otp, code, user_id } = req.body;
+
+    const phoneValue = phone_number || phone;
+    const otpValue = otp || code;
+
+    if ((!phoneValue && !user_id) || !otpValue) {
+      return res.status(400).json({
+        success: false,
+        error: 'Phone/user and OTP are required'
+      });
+    }
+
+    let query = supabase.from('users').select('user_id, full_name');
+    if (user_id) {
+      query = query.eq('user_id', user_id);
+    } else {
+      query = query.eq('phone_number', phoneValue).limit(1);
+    }
+
+    const { data: user, error: userErr } = await query;
+    if (userErr) throw userErr;
+
+    const record = Array.isArray(user) ? user[0] : user;
+    if (!record) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+
+    if (String(otpValue).length < 4) {
+      return res.status(400).json({ success: false, error: 'Invalid OTP' });
+    }
+
+    res.json({ success: true, message: 'OTP verified successfully', user_id: record.user_id, full_name: record.full_name });
+  } catch (error) {
+    console.error('OTP verification error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'OTP verification failed: ' + error.message
+    });
+  }
+});
+
+// POST /api/login.php - Compatibility login for mobile (id_number or phone)
+router.post('/login.php', async (req, res) => {
+  try {
+    const { idNumber, password } = req.body;
+
+    if (!idNumber || !password) {
+      return res.status(400).json({ success: false, error: 'ID Number and password are required' });
+    }
+
+    // Lookup by id_number or phone_number
+    const { data: user, error: userErr } = await supabase
+      .from('users')
+      .select('*')
+      .or(`id_number.eq.${idNumber},phone_number.eq.${idNumber}`)
+      .limit(1);
+
+    if (userErr) throw userErr;
+
+    if (!user || user.length === 0) {
+      return res.status(401).json({ success: false, error: 'Invalid ID Number or password' });
+    }
+
+    const record = user[0];
+
+    // Password check: bcrypt or plain fallback
+    let passwordMatch = false;
+    try {
+      const bcrypt = await import('bcrypt');
+      passwordMatch = await bcrypt.compare(password, record.password);
+    } catch (e) {
+      // ignore
+    }
+    if (!passwordMatch && password === record.password) {
+      passwordMatch = true;
+    }
+
+    if (!passwordMatch) {
+      return res.status(401).json({ success: false, error: 'Invalid ID Number or password' });
+    }
+
+    return res.json({ success: true, message: 'Login successful', user: record });
+  } catch (error) {
+    console.error('Compatibility login error:', error);
+    res.status(500).json({ success: false, error: 'Login failed: ' + error.message });
   }
 });
 

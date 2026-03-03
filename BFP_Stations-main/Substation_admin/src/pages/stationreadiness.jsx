@@ -118,8 +118,8 @@ export default function StationReadiness() {
         <div className="readiness-header">
           <h2>Station: {user?.stationInfo?.station_name || 'Not Assigned'}</h2>
           {user?.stationInfo && (
-            <p style={{ margin: '8px 0 0 0', fontSize: '14px', opacity: 0.9 }}>
-              Submitted by: {user?.name || 'Officer'}
+            <p style={{ margin: '4px 0 0 0', fontSize: '13px', opacity: 0.8 }}>
+              Station ID: {user?.assignedStationId} &bull; Submitted by: {user?.name || 'Officer'}
             </p>
           )}
         </div>

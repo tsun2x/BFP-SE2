@@ -22,6 +22,11 @@ Thumbs.db
 # PHP / Composer (if you ever use it)
 vendor/
 
+# Environment files (contain secrets — NEVER commit these)
+.env
+.env.local
+.env.production
+
 # Generic build outputs
 /dist/
 /build/

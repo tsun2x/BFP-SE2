@@ -38,17 +38,30 @@ export const MapScreen = () => {
     goBack();
   };
 
-  // Fetch firetruck locations
+  // Fetch firetruck locations from Node backend
   const fetchFiretruckLocations = async () => {
     try {
-      // For now, fetch all active, recently online trucks (backend already filters by is_active and last_online)
-      const url = `${API_URL}/api/get_firetruck_locations.php?limit=50`;
+      // For now, fetch all active, recently online trucks (backend already filters by recency)
+      const url = `${API_URL}/api/firetruck-locations`;
       console.log('Fetching trucks from', url);
       const response = await fetch(url);
       const json = await response.json();
 
-      // PHP returns { success: boolean, data: [...] }
-      const list = Array.isArray(json?.data) ? json.data : Array.isArray(json) ? json : [];
+      // Node endpoint returns { locations: [...] } for civilian map
+      let list: any[] = [];
+      if (Array.isArray(json?.locations)) {
+        list = json.locations;
+      } else if (Array.isArray(json?.data)) {
+        list = json.data;
+      } else if (Array.isArray(json)) {
+        list = json;
+      }
+
+      // Normalize to include last_online for UI (use recorded_at when available)
+      list = list.map((item) => ({
+        ...item,
+        last_online: item.last_online || item.recorded_at || null,
+      }));
 
       setFiretrucks(list);
       setError(null);
@@ -81,12 +94,12 @@ export const MapScreen = () => {
 
   const fetchFireStations = async () => {
     try {
-      const url = `${API_URL}/api/get_fire_stations.php`;
+      const url = `${API_URL}/api/firestations`;
       console.log('Fetching stations from', url);
       const response = await fetch(url);
       const json = await response.json();
 
-      const list = Array.isArray(json?.data) ? json.data : Array.isArray(json) ? json : [];
+      const list = Array.isArray(json?.stations) ? json.stations : Array.isArray(json?.data) ? json.data : Array.isArray(json) ? json : [];
 
       setFireStations(list);
     } catch (err) {

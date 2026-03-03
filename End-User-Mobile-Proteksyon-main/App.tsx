@@ -11,6 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import type { NavigationContainerProps } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { AuthProvider } from './src/context/AuthContext';
 import { LoginScreen } from './src/screens/Auth/LoginScreen';
 import { RegisterScreen } from './src/screens/Auth/RegisterScreen';
 import { VerifyOtpScreen } from './src/screens/Auth/VerifyOtpScreen';
@@ -157,6 +158,7 @@ const MainTabs: React.FC = () => {
 
 const App: React.FC = () => {
   return (
+    <AuthProvider>
     <NavigationContainer ref={navigationRef}>
       <Stack.Navigator>
         <Stack.Screen name="Login" component={LoginScreen} />
@@ -212,13 +214,9 @@ const App: React.FC = () => {
           component={FireSafetyTipsScreen}
           options={{ headerShown: false }}
         />
-        <Stack.Screen
-          name="CallTest"
-          component={CallTestScreen}
-          options={{ headerShown: true, title: 'WebRTC Call Test' }}
-        />
       </Stack.Navigator>
     </NavigationContainer>
+    </AuthProvider>
   );
 };
 

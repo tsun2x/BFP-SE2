@@ -101,7 +101,7 @@ export default function BranchStatus() {
                 <div className="station-header">
                   <h2>{station.stationName}</h2>
                   <small style={{ opacity: 0.7, fontSize: '12px' }}>
-                    {station.stationType === 'MAIN' ? 'Main Station' : 'Branch Station'}
+                    ID: {station.stationId} &bull; {station.stationType === 'MAIN' ? 'Main Station' : 'Branch Station'}
                   </small>
                 </div>
 

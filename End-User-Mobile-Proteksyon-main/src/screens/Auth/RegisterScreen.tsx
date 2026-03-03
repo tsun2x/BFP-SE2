@@ -54,9 +54,9 @@ export const RegisterScreen = ({ navigation }) => {
     try {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
-      console.log('Calling URL', `${API_URL}/api/register_start.php`);
+      console.log('Calling URL', `${API_URL}/api/enduser/register`);
 
-      const response = await fetch(`${API_URL}/api/register_start.php`, {
+      const response = await fetch(`${API_URL}/api/enduser/register`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -73,15 +73,15 @@ export const RegisterScreen = ({ navigation }) => {
       });
 
       const rawText = await response.text();
-      console.log('Raw response text from register_start.php:', rawText);
+      console.log('Raw response text from enduser/register:', rawText);
 
       let json;
       try {
         json = JSON.parse(rawText);
       } catch (parseError) {
-        console.log('Failed to parse JSON from register_start.php:', parseError);
+        console.log('Failed to parse JSON from enduser/register:', parseError);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-        alert('Server response is not valid JSON. Please check PHP error logs.');
+        alert('Server response is not valid JSON. Please check server error logs.');
         return;
       }
 

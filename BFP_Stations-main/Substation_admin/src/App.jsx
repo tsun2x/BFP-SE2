@@ -24,13 +24,13 @@ import TestPage from "./pages/TestPage";
 
 import { StatusProvider } from "./context/StatusContext";
 import CallModal from "./components/CallModal";
-import IncomingCallModal from "./components/IncomingCallModal";
+import useTwilioVoice from "./hooks/useTwilioVoice";
 import "./layout.css";
 
 function AppContent() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { incomingCalls, ongoingCalls, addIncomingCall, acceptCall, endCall } = useContext(CallContext);
+  const { incomingCalls, ongoingCalls, addIncomingCall, acceptCall, rejectCall, endCall } = useContext(CallContext);
   const { addNotification } = useNotifications();
   const { toasts, success, info } = useToast();
   const socketRef = useRef(null);
@@ -39,6 +39,33 @@ function AppContent() {
   const [voiceConsoleMinimized, setVoiceConsoleMinimized] = React.useState(false);
   const voiceCardRef = useRef(null);
   const dragStateRef = useRef({ dragging: false, startX: 0, startY: 0, lastTx: 0, lastTy: 0 });
+
+  // ==== Twilio Voice SDK ====
+  const twilioIdentity = user
+    ? `ADM_SUB_${user.assigned_station_id || user.assignedStationId || 0}`
+    : null;
+  const jwtToken = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
+
+  const {
+    incomingCall: twilioIncomingCall,
+    activeCall: twilioActiveCall,
+    status: twilioStatus,
+    acceptIncoming: twilioAcceptIncoming,
+    rejectIncoming: twilioRejectIncoming,
+    hangUp: twilioHangUp,
+    error: twilioError,
+  } = useTwilioVoice(twilioIdentity, jwtToken, {
+    onIncomingCall: (call) => {
+      console.log('[Twilio] Incoming call received in Substation:', call.parameters?.From);
+    },
+    onCallDisconnected: () => {
+      console.log('[Twilio] Call disconnected');
+    },
+  });
+
+  React.useEffect(() => {
+    console.log(`[Twilio] Status: ${twilioStatus}, Identity: ${twilioIdentity}, Error: ${twilioError || 'none'}`);
+  }, [twilioStatus, twilioIdentity, twilioError]);
 
   // pages without layout
   const noLayoutRoutes = ["/login", "/signup"];
@@ -136,63 +163,70 @@ function AppContent() {
     state.startY = e.clientY;
   };
 
+  // Stable refs for callbacks so socket useEffect doesn't re-run on every render
+  const addIncomingCallRef = useRef(addIncomingCall);
+  const addNotificationRef = useRef(addNotification);
+  const infoRef = useRef(info);
+  const navigateRef = useRef(navigate);
+  const rejectCallRef = useRef(rejectCall);
+  const twilioRejectRef = useRef(twilioRejectIncoming);
+  const twilioIncomingRef = useRef(twilioIncomingCall);
+  useEffect(() => { addIncomingCallRef.current = addIncomingCall; }, [addIncomingCall]);
+  useEffect(() => { addNotificationRef.current = addNotification; }, [addNotification]);
+  useEffect(() => { infoRef.current = info; }, [info]);
+  useEffect(() => { navigateRef.current = navigate; }, [navigate]);
+  useEffect(() => { rejectCallRef.current = rejectCall; }, [rejectCall]);
+  useEffect(() => { twilioRejectRef.current = twilioRejectIncoming; }, [twilioRejectIncoming]);
+  useEffect(() => { twilioIncomingRef.current = twilioIncomingCall; }, [twilioIncomingCall]);
+
   // Socket: listen for incidents and join station-specific room
+  // Only reconnect when stationId actually changes
+  const stationId = user?.assignedStationId || user?.assigned_station_id || null;
   useEffect(() => {
     const socket = io('http://localhost:5000');
     socketRef.current = socket;
 
     socket.on('connect', () => {
       console.log('Connected to socket server', socket.id);
-      const envStation = Number(import.meta.env.VITE_STATION_ID || 0) || null;
-      const stationId =
-        envStation ||
-        user?.assignedStationId ||
-        user?.assigned_station_id ||
-        user?.stationInfo?.station_id ||
-        null;
       if (stationId) {
         socket.emit('join-station', { stationId });
+        socket.emit('station-online', { stationId });
+        console.log('[Socket] Emitted station-online for station', stationId);
       }
     });
 
-    // Broadcast incidents from other stations
+    const buildCallObj = (data) => ({
+      id: data.alarmId || Date.now(),
+      number: data.phoneNumber || 'Unknown',
+      firstName: data.firstName || '',
+      lastName: data.lastName || '',
+      phoneNumber: data.phoneNumber || '',
+      location: data.location || '',
+      incidentType: data.incidentType || '',
+      narrative: data.narrative || '',
+      alarmLevel: data.alarmLevel || '',
+      coordinates: data.coordinates
+        ? {
+            lat: Number(data.coordinates.lat ?? data.coordinates.latitude ?? 0),
+            lng: Number(data.coordinates.lng ?? data.coordinates.longitude ?? 0),
+          }
+        : { lat: 14.5995, lng: 120.9842 },
+      timestamp: new Date(),
+    });
+
+    // Broadcast incidents from other stations — notification only, NO modal
     socket.on('new-incident', (data) => {
       try {
-        console.log('[Frontend] Received new-incident from socket:', data);
-
-        // Emit back to server to save to database (existing behavior)
-        socket.emit('new-incident', data);
-
-        const callObj = {
-          id: data.alarmId || Date.now(),
-          number: data.phoneNumber || 'Unknown',
-          firstName: data.firstName || '',
-          lastName: data.lastName || '',
-          phoneNumber: data.phoneNumber || '',
-          location: data.location || '',
-          incidentType: data.incidentType || '',
-          narrative: data.narrative || '',
-          alarmLevel: data.alarmLevel || '',
-          coordinates: data.coordinates
-            ? {
-                lat: Number(data.coordinates.lat ?? data.coordinates.latitude ?? 0),
-                lng: Number(data.coordinates.lng ?? data.coordinates.longitude ?? 0),
-              }
-            : { lat: 14.5995, lng: 120.9842 },
-          timestamp: new Date(),
-        };
-
-        addIncomingCall(callObj);
-        addNotification({
-          title: `New Incident  ${data.incidentType || 'Unknown type'}`,
+        console.log('[Frontend] Received new-incident broadcast:', data);
+        addNotificationRef.current({
+          title: `New Incident  ${data.incidentType || 'Unknown type'}`,
           message: data.location || 'Another station',
           type: 'incident',
-          payload: callObj,
         });
-        info(
+        infoRef.current(
           `New incident from ${data.location || 'another station'} (${data.incidentType || 'Unknown type'})`,
           undefined,
-          { sticky: true, actionLabel: 'View Incident', onAction: () => navigate('/incident-report') }
+          { sticky: false }
         );
       } catch (e) {
         console.warn('Failed to process incoming incident', e);
@@ -201,45 +235,59 @@ function AppContent() {
 
     // Incidents dispatched specifically to this station from end-user app
     socket.on('incoming-incident', (data) => {
+      // Ignore if this incident is for a different station
+      if (stationId && data?.assignedStationId && Number(data.assignedStationId) !== Number(stationId)) {
+        return;
+      }
+
       console.log('[Frontend] Received incoming-incident for this station:', data);
-
-      const callObj = {
-        id: data.alarmId || Date.now(),
-        number: data.phoneNumber || 'Unknown',
-        firstName: data.firstName || '',
-        lastName: data.lastName || '',
-        phoneNumber: data.phoneNumber || '',
-        location: data.location || '',
-        incidentType: data.incidentType || '',
-        narrative: data.narrative || '',
-        alarmLevel: data.alarmLevel || '',
-        coordinates: data.coordinates
-          ? {
-              lat: Number(data.coordinates.lat ?? data.coordinates.latitude ?? 0),
-              lng: Number(data.coordinates.lng ?? data.coordinates.longitude ?? 0),
-            }
-          : { lat: 14.5995, lng: 120.9842 },
-        timestamp: new Date(),
-      };
-
-      addIncomingCall(callObj);
-      addNotification({
-        title: `New Incident  ${data.incidentType || 'Unknown type'}`,
+      const callObj = buildCallObj(data);
+      addIncomingCallRef.current(callObj);
+      addNotificationRef.current({
+        title: `New Incident  ${data.incidentType || 'Unknown type'}`,
         message: data.location || 'From end-user',
         type: 'incident',
         payload: callObj,
       });
-      info(
+      infoRef.current(
         `New incident from end-user: ${data.incidentType || 'Unknown'} at ${data.location || 'unknown location'}`,
         undefined,
-        { sticky: true, actionLabel: 'View Incident', onAction: () => navigate('/incident-report') }
+        { sticky: true, actionLabel: 'View Incident', onAction: () => navigateRef.current('/incident-report') }
       );
+    });
+
+    // Auto-reject: backend tells this station its 20s is up — dismiss modal & reject Twilio
+    socket.on('auto-reject', (data) => {
+      const alarmId = data?.alarmId;
+      console.log(`[AutoReject] Station ${stationId}: failover timeout, auto-rejecting alarm ${alarmId}`);
+      // Remove from incoming calls (dismiss modal)
+      if (alarmId) {
+        rejectCallRef.current(alarmId);
+      }
+      // Reject Twilio incoming call if still ringing (use refs to avoid stale closure)
+      try { if (twilioIncomingRef.current) twilioRejectRef.current(); } catch (e) { console.warn('[AutoReject] Twilio reject error:', e); }
     });
 
     socket.on('disconnect', () => console.log('Socket disconnected'));
 
     return () => { socket.disconnect(); };
-  }, [navigate, addIncomingCall, addNotification, info, user?.assignedStationId, user?.assigned_station_id]);
+  }, [stationId]);
+
+  // Re-emit station-online whenever user logs in (socket may already be connected)
+  useEffect(() => {
+    const socket = socketRef.current;
+    if (!socket || !user) return;
+    const stationId =
+      user?.assignedStationId ||
+      user?.assigned_station_id ||
+      user?.stationInfo?.station_id ||
+      null;
+    if (stationId && socket.connected) {
+      socket.emit('join-station', { stationId });
+      socket.emit('station-online', { stationId });
+      console.log('[Socket] Re-emitted station-online for station', stationId);
+    }
+  }, [user]);
 
   const showVoiceConsoleOverlay =
     location.pathname !== '/station-readiness' &&
@@ -332,19 +380,66 @@ function AppContent() {
             )}
           </div>
 
-          {/* Incoming Calls Modal */}
-          {incomingCalls.map((call) => (
-            <IncomingCallModal
-              key={call.id}
-              callNumber={call.phoneNumber || call.number || "Unknown"}
-              onAccept={() => {
-                acceptCall(call.id);
-                // After accepting, navigate to Incident Report and open the global voice console overlay
-                setVoiceConsoleOpen(true);
-                navigate('/incident-report');
-              }}
-            />
-          ))}
+          {/* ==== Incoming Emergency Call Modal (socket-based) ==== */}
+          {incomingCalls.length > 0 && (
+            <div className="modal-overlay" style={{ zIndex: 10001, background: 'rgba(0,0,0,0.7)' }}>
+              <div className="modal-card" style={{ textAlign: 'center', maxWidth: '420px', padding: '32px 28px', borderRadius: '16px', animation: 'pulse 1.5s infinite' }}>
+                <div style={{ fontSize: '48px', marginBottom: '12px' }}>📞</div>
+                <h2 style={{ margin: '0 0 8px', color: '#dc3545', fontSize: '1.5em' }}>Incoming Emergency</h2>
+                <p style={{ margin: '4px 0', fontSize: '1.1em' }}><strong>Type:</strong> {incomingCalls[0].incidentType || 'Unknown'}</p>
+                <p style={{ margin: '4px 0' }}><strong>From:</strong> {incomingCalls[0].phoneNumber || incomingCalls[0].number || 'Unknown'}</p>
+                {incomingCalls[0].location && <p style={{ margin: '4px 0' }}><strong>Location:</strong> {incomingCalls[0].location}</p>}
+                {incomingCalls[0].alarmLevel && <p style={{ margin: '4px 0' }}><strong>Alarm:</strong> {incomingCalls[0].alarmLevel}</p>}
+                <div style={{ marginTop: '20px', display: 'flex', gap: '12px', justifyContent: 'center' }}>
+                  <button onClick={() => {
+                    const call = incomingCalls[0];
+                    const token = localStorage.getItem('authToken');
+                    console.log('[Accept] Sending accept for alarm', call.id, 'station', stationId, 'token?', !!token);
+                    // Fire-and-forget: send accept to backend to cancel failover
+                    fetch(`http://localhost:5000/api/incidents/${call.id}/accept`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                      body: JSON.stringify({ stationId: stationId }),
+                    }).then(r => console.log('[Accept] Response:', r.status)).catch(e => console.warn('[Accept] Failed:', e));
+                    acceptCall(call.id);
+                    // Also accept the Twilio VoIP call if one is ringing
+                    try { if (twilioIncomingCall) twilioAcceptIncoming(); } catch (e) {}
+                    navigate('/incident-report');
+                  }} style={{ padding: '12px 32px', backgroundColor: '#28a745', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '1em', boxShadow: '0 2px 8px rgba(40,167,69,0.4)' }}>Accept</button>
+                  <button onClick={() => { rejectCall(incomingCalls[0].id); try { if (twilioIncomingCall) twilioRejectIncoming(); } catch(e){} }} style={{ padding: '12px 32px', backgroundColor: '#6c757d', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '1em' }}>Dismiss</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Twilio Voice Incoming Call modal removed — socket modal handles UX,
+              auto-reject handles Twilio SDK call dismissal via refs */}
+
+          {/* ==== Twilio Active Call Banner (hang up) ==== */}
+          {twilioActiveCall && (
+            <div style={{ position: 'fixed', top: '8px', right: '8px', zIndex: 10000, background: '#28a745', color: '#fff', padding: '10px 18px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.3)' }}>
+              <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#fff', animation: 'pulse 1s infinite' }}></span>
+              <span>On Call — {twilioActiveCall.parameters?.From || 'Emergency'}</span>
+              <button onClick={twilioHangUp} style={{ background: '#dc3545', color: '#fff', border: 'none', borderRadius: '4px', padding: '6px 12px', cursor: 'pointer', fontWeight: 'bold' }}>Hang Up</button>
+            </div>
+          )}
+
+          {/* ==== Ongoing Calls Banner (socket-based accepted calls) ==== */}
+          {!twilioActiveCall && ongoingCalls.length > 0 && (
+            <div style={{ position: 'fixed', top: '8px', right: '8px', zIndex: 10000, background: '#28a745', color: '#fff', padding: '10px 18px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.3)' }}>
+              <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#fff', animation: 'pulse 1s infinite' }}></span>
+              <span>Active Incident — {ongoingCalls[0].incidentType || 'Emergency'} ({ongoingCalls[0].phoneNumber || 'Unknown'})</span>
+              <button onClick={() => endCall(ongoingCalls[0].id)} style={{ background: '#dc3545', color: '#fff', border: 'none', borderRadius: '4px', padding: '6px 12px', cursor: 'pointer', fontWeight: 'bold' }}>End</button>
+            </div>
+          )}
+
+          {/* ==== Twilio Status Indicator ==== */}
+          {twilioIdentity && (
+            <div style={{ position: 'fixed', bottom: '60px', right: '16px', zIndex: 9998, display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: '#666', background: '#f8f9fa', padding: '4px 10px', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
+              <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: twilioStatus === 'ready' ? '#28a745' : twilioStatus === 'busy' ? '#ffc107' : '#dc3545' }}></span>
+              Twilio: {twilioStatus} ({twilioIdentity})
+            </div>
+          )}
 
           {/* Global Voice Console Overlay (iframe keeps running even when hidden) */}
           {showVoiceConsoleOverlay && (

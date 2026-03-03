@@ -22,24 +22,33 @@ router.post('/login', async (req, res) => {
 
     console.log('[POST /login] Attempt login for idNumber:', idNumber);
 
-    // Query users table in Supabase
-    const { data: rows, error } = await supabase
+    // Query users table in Supabase — try id_number first, then phone_number
+    let user = null;
+    const { data: rowsById, error: errById } = await supabase
       .from('users')
       .select('*')
       .eq('id_number', idNumber)
       .single();
 
-    if (error) {
-      console.error('[POST /login] Supabase error:', error);
-      return res.status(500).json({ message: 'Database error', error: error.message });
+    if (!errById && rowsById) {
+      user = rowsById;
+    } else {
+      // Fallback: lookup by phone_number (for end_user / civilian login)
+      const { data: rowsByPhone, error: errByPhone } = await supabase
+        .from('users')
+        .select('*')
+        .eq('phone_number', idNumber)
+        .single();
+
+      if (!errByPhone && rowsByPhone) {
+        user = rowsByPhone;
+      }
     }
 
-    if (!rows) {
-      console.log('[POST /login] No user found for idNumber:', idNumber);
+    if (!user) {
+      console.log('[POST /login] No user found for idNumber/phone:', idNumber);
       return res.status(401).json({ message: 'Invalid ID Number or password' });
     }
-
-    const user = rows;
     console.log('[POST /login] Found user id:', user.user_id, 'role:', user.role, 'assigned_station_id:', user.assigned_station_id);
     console.log('[POST /login] Stored password hash:', user.password ? user.password.substring(0, 20) + '...' : 'NULL');
     console.log('[POST /login] Provided password:', password);
@@ -412,7 +421,7 @@ router.get('/stations', async (req, res) => {
   try {
     const { data: rows, error } = await supabase
       .from('fire_stations')
-      .select('station_id, station_name')
+      .select('station_id, station_name, station_type')
       .order('station_name', { ascending: true });
 
     if (error) throw error;

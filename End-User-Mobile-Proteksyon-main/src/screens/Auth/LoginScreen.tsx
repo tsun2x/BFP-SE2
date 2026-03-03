@@ -12,10 +12,12 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { API_URL } from '../../config';
 import { LocationPermissionModal } from '../../components/LocationPermissionModal';
+import { useAuth } from '../../context/AuthContext';
 
 export const LoginScreen = ({ navigation }) => {
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
+  const { login } = useAuth();
 
   const handleSignIn = async () => {
     if (!phone || !password) {
@@ -26,39 +28,13 @@ export const LoginScreen = ({ navigation }) => {
 
     try {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-
-      const response = await fetch(`${API_URL}/api/login.php`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          idNumber: phone,
-          password,
-        }),
-      });
-
-      const rawText = await response.text();
-      let json: any;
-      try {
-        json = JSON.parse(rawText);
-      } catch (e) {
-        console.error('Failed to parse login response JSON:', e, rawText);
+      const result = await login(phone, password);
+      if (result.success) {
+        navigation.replace('MainTabs');
+      } else {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-        alert('Server response is not valid JSON. Please check PHP logs.');
-        return;
+        alert(result.error || 'Login failed');
       }
-
-      if (!response.ok) {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-        alert(json.message || 'Login failed.');
-        return;
-      }
-
-      // Optional: store token/user in memory or AsyncStorage later
-      console.log('End-user login success:', json);
-
-      navigation.replace('MainTabs');
     } catch (error) {
       console.error('Login error:', error);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);

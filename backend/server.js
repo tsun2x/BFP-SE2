@@ -9,8 +9,12 @@ import incidentRoutes from './routes/incidentRoutes.js';
 import fireStationsRoutes from './routes/fireStations.js';
 import readinessRoutes from './routes/readinessRoutes.js';
 import compatibilityRoutes from './routes/compatibilityRoutes.js';
+import twilioCallbacksRoutes from './routes/twilioCallbacks.js';
+import twilioTokenRoutes from './routes/twilioTokenRoutes.js';
 import { authenticateToken } from './middleware/auth.js';
+import { stationConnected, stationDisconnected, socketDisconnected, getOnlineStationsSummary } from './services/onlineStations.js';
 
+import { cancelFailover, getFailoverEntry } from './services/dispatchService.js';
 dotenv.config();
 
 const app = express();
@@ -30,6 +34,58 @@ app.set('io', io);
 
 io.on('connection', (socket) => {
   console.log('Socket connected:', socket.id);
+
+  // ── Station online tracking ─────────────────────────────────────────
+  // Station admin clients emit 'station-online' after login with their stationId
+  socket.on('station-online', (data) => {
+    console.log('[OnlineStations] Raw station-online data:', JSON.stringify(data), 'type:', typeof data);
+    const stationId = data?.stationId || data;
+    console.log('[OnlineStations] Resolved stationId:', stationId, 'type:', typeof stationId);
+    if (stationId) {
+      socket._stationId = Number(stationId);
+      stationConnected(Number(stationId), socket.id);
+      socket.join(`station-${stationId}`);
+      // Broadcast updated online list to all clients
+      io.emit('stations-online-update', getOnlineStationsSummary());
+    }
+  });
+
+  // ── Main admin room ────────────────────────────────────────────────
+  socket.on('join-main-admin', () => {
+    socket.join('main-admin');
+    console.log(`[Socket] Main admin joined room main-admin (socket ${socket.id})`);
+  });
+
+  // ── Civilian alarm room ────────────────────────────────────────────
+  // Mobile app joins alarm-{alarmId} room so it receives failover-redirect events
+  socket.on('join-alarm', (data) => {
+    const alarmId = data?.alarmId;
+    if (alarmId) {
+      socket.join(`alarm-${alarmId}`);
+      console.log(`[Socket] Civilian joined room alarm-${alarmId} (socket ${socket.id})`);
+    }
+  });
+
+  // ── Civilian cancels call ─────────────────────────────────────────
+  // When the end-user hangs up, cancel failover and dismiss all station modals
+  socket.on('call-cancelled', (data) => {
+    const alarmId = data?.alarmId;
+    if (!alarmId) return;
+    console.log(`[Socket] Civilian cancelled call for alarm ${alarmId}`);
+    // Find which station currently has the alarm
+    const entry = getFailoverEntry(alarmId);
+    const currentStationId = entry?.stationId;
+    // Cancel the failover timer
+    cancelFailover(alarmId);
+    // Send auto-reject to the current station so its modal dismisses
+    if (currentStationId && currentStationId !== 'main') {
+      io.to(`station-${currentStationId}`).emit('auto-reject', { alarmId });
+      console.log(`[Socket] Sent auto-reject to station-${currentStationId} (civilian cancelled)`);
+    }
+    // Also send auto-reject to main-admin in case it has the modal
+    io.to('main-admin').emit('auto-reject', { alarmId });
+    console.log(`[Socket] Sent auto-reject to main-admin (civilian cancelled)`);
+  });
 
   // Listen for new incidents from other stations and save to database
   socket.on('new-incident', async (data) => {
@@ -121,7 +177,17 @@ io.on('connection', (socket) => {
     socket.leave(`alarm-${alarmId}`);
   });
 
-  socket.on('disconnect', () => console.log('Socket disconnected:', socket.id));
+  socket.on('disconnect', () => {
+    console.log('Socket disconnected:', socket.id);
+    // Remove from online tracking
+    if (socket._stationId) {
+      stationDisconnected(socket._stationId, socket.id);
+    } else {
+      socketDisconnected(socket.id);
+    }
+    // Broadcast updated online list
+    io.emit('stations-online-update', getOnlineStationsSummary());
+  });
 });
 
 // Auth routes (no authentication required)
@@ -138,6 +204,18 @@ app.use('/api', fireStationsRoutes);
 
 // Compatibility routes - Old PHP endpoint paths for backward compatibility with mobile apps
 app.use('/api', compatibilityRoutes);
+
+// Twilio callbacks (status + recording). These are unauthenticated but only accept Twilio webhooks.
+app.use('/api', twilioCallbacksRoutes);
+
+// Twilio token generation + voice TwiML webhook
+app.use(express.urlencoded({ extended: false })); // Twilio sends form-encoded POSTs
+app.use('/api', twilioTokenRoutes);
+
+// ── Online stations endpoint ──────────────────────────────────────────
+app.get('/api/stations/online', (req, res) => {
+  res.json({ online: getOnlineStationsSummary() });
+});
 
 app.get('/api/health', async (req, res) => {
   try {
@@ -166,7 +244,29 @@ app.get('/api/health', async (req, res) => {
   }
 });
 
+// ── Auto-update TwiML App Voice URL on startup ───────────────────────
+async function updateTwimlAppUrl() {
+  const { TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_TWIML_APP_SID, PUBLIC_BASE_URL } = process.env;
+  if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN || !TWILIO_TWIML_APP_SID || !PUBLIC_BASE_URL) {
+    console.warn('[TwiML] Skipping TwiML App URL update — missing env vars');
+    return;
+  }
+  const voiceUrl = `${PUBLIC_BASE_URL.replace(/\/$/, '')}/api/twilio/voice`;
+  try {
+    const twilioModule = await import('twilio');
+    const twilioClient = twilioModule.default(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
+    await twilioClient.applications(TWILIO_TWIML_APP_SID).update({
+      voiceUrl,
+      voiceMethod: 'POST',
+    });
+    console.log(`[TwiML] Updated TwiML App voice URL → ${voiceUrl}`);
+  } catch (err) {
+    console.error('[TwiML] Failed to update TwiML App URL:', err.message);
+  }
+}
+
 // Start HTTP server (with Socket.IO)
 httpServer.listen(PORT, () => {
   console.log(`Server is running on http://localhost:${PORT}`);
+  updateTwimlAppUrl();
 });

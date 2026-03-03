@@ -22,7 +22,7 @@ export const VerifyOtpScreen = ({ route, navigation }) => {
       setError(null);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
-      const response = await fetch(`${API_URL}/api/verify_phone_otp.php`, {
+      const response = await fetch(`${API_URL}/api/enduser/verify-otp`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -296,6 +296,15 @@ npx expo start
 npx expo run:android
 ```
 
+### 7f. Build an installable dev APK (optional)
+- In `End-User-Mobile-Proteksyon-main`, run:
+  ```bash
+  npm install
+  npx expo run:android --variant devDebug
+  ```
+- The APK will appear under `android/app/build/outputs/apk/devDebug/`.
+- Copy that APK to your Android device and install (unknown sources must be allowed).
+
 > **NOTE:** Twilio Voice SDK requires a **development build** (not Expo Go). If you're just testing the UI without voice, Expo Go works fine.
 
 ### 7f. Scan QR code

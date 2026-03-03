@@ -1,3 +1,5 @@
+@import './modals.css';
+
 :root{
   --bg: #f8fafc;
   --panel: #ffffff;
@@ -9,8 +11,6 @@
   --surface-shadow: 0 1px 3px rgba(0,0,0,0.1);
   --border: #e2e8f0;
 }
-
-@import './modals.css';
 
 /* Ensure the whole page content (the part after your left nav) is offset so it doesn't overlap */
 .reports-page { padding: 20px; background: var(--bg); min-height: calc(100vh - 0px); }

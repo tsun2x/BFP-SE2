@@ -321,21 +321,20 @@ export const EmergencyCallScreen: React.FC = () => {
         console.log(`[Socket] Joined alarm room: alarm-${data.alarmId}`);
       }
 
-      // Step 3: Dial the station via VoIP
-      if (data.dispatchedStationId) {
+      // Step 3: Determine Twilio identity — substation or main admin (direct dispatch)
+      const isMainAdmin = !data.dispatchedStationId && data.dispatchedStationName === 'Central Fire Station (Main)';
+      const stationIdentity = isMainAdmin ? 'ADM_MAIN' : data.dispatchedStationId ? `ADM_SUB_${data.dispatchedStationId}` : null;
+
+      if (stationIdentity) {
         setCallPhase('dialing');
-        const stationIdentity = `ADM_SUB_${data.dispatchedStationId}`;
         console.log(`[VoIP] Calling station identity: ${stationIdentity}, voipStatus: ${voipStatus}, voipError: ${voipError}`);
 
-        // Always attempt the call — makeCall checks voiceRef internally.
-        // The voipStatus closure may be stale, so don't gate on it.
         try {
           const call = await voipCall(stationIdentity);
           if (call) {
             console.log('[VoIP] Call initiated successfully');
             setCallPhase('ringing');
           } else {
-            // SDK not ready yet — retry once after 2s
             console.warn('[VoIP] First attempt returned null, retrying in 2s...');
             setCallPhase('ringing');
             setTimeout(async () => {

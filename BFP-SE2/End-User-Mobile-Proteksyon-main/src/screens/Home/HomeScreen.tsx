@@ -15,28 +15,32 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { LocationPermissionModal } from '../../components/LocationPermissionModal';
+import { NODE_API_URL } from '../../config';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-const featuredNews = [
-  {
-    id: '1',
-    title: '3-Alarm Fire Controlled in ZC',
-    date: 'October 08, 2025',
-    imageUrl: 'https://via.placeholder.com/600x300',
-  },
-  {
-    id: '2',
-    title: 'Kitchen Fire Contained in San Pedro Residence',
-    date: 'October 15, 2025',
-    imageUrl: 'https://via.placeholder.com/600x300',
-  },
-];
+
 
 export const HomeScreen: React.FC = () => {
   const navigation = useNavigation<any>();
   const [showHamburgerMenu, setShowHamburgerMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showLocationModal, setShowLocationModal] = useState(false);
+  const [featuredNews, setFeaturedNews] = useState<any[]>([]);
+
+  // Fetch live news from backend
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch(`${NODE_API_URL}/api/public/news`, {
+          headers: { 'ngrok-skip-browser-warning': 'true' },
+        });
+        const json = await res.json();
+        if (json.success) setFeaturedNews((json.data || []).slice(0, 3));
+      } catch (e) {
+        console.error('[Home] news fetch error:', e);
+      }
+    })();
+  }, []);
 
   // Show location modal when dashboard first loads
   useEffect(() => {
@@ -205,7 +209,7 @@ export const HomeScreen: React.FC = () => {
               onPress={() => navigation.navigate('Article', { articleId: news.id })}
             >
               <Image
-                source={{ uri: news.imageUrl }}
+                source={news.headline_image ? { uri: news.headline_image } : { uri: 'https://via.placeholder.com/600x300' }}
                 style={styles.newsImage}
                 resizeMode="cover"
               />
@@ -213,7 +217,7 @@ export const HomeScreen: React.FC = () => {
                 <Text style={styles.newsTitle} numberOfLines={2}>
                   {news.title}
                 </Text>
-                <Text style={styles.newsDate}>{news.date}</Text>
+                <Text style={styles.newsDate}>{news.published_at ? new Date(news.published_at).toLocaleDateString('en-US', { month: 'long', day: '2-digit', year: 'numeric' }) : ''}</Text>
               </View>
             </TouchableOpacity>
           ))}

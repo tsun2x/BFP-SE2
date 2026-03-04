@@ -292,4 +292,45 @@ router.delete('/safety-tips/:id', authenticateToken, requireAdmin, async (req, r
   }
 });
 
+
+// ── PUBLIC endpoints (no auth required) ──────────────────────────────
+
+// GET /api/public/safety-tip-categories
+router.get('/public/safety-tip-categories', async (_req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('safety_tip_categories')
+      .select('id, name, color, image_url')
+      .order('name', { ascending: true });
+
+    if (error) {
+      console.error('GET /public/safety-tip-categories error:', error);
+      return res.status(500).json({ success: false, message: 'Failed to fetch categories', error: error.message });
+    }
+    return res.json({ success: true, data: data || [] });
+  } catch (e) {
+    console.error('GET /public/safety-tip-categories exception:', e);
+    return res.status(500).json({ success: false, message: 'Failed to fetch categories', error: e.message });
+  }
+});
+
+// GET /api/public/safety-tips (all tips, grouped by category)
+router.get('/public/safety-tips', async (_req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('safety_tips')
+      .select('id, section, category_id, task, description, image_url, created_at')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('GET /public/safety-tips error:', error);
+      return res.status(500).json({ success: false, message: 'Failed to fetch safety tips', error: error.message });
+    }
+    return res.json({ success: true, data: data || [] });
+  } catch (e) {
+    console.error('GET /public/safety-tips exception:', e);
+    return res.status(500).json({ success: false, message: 'Failed to fetch safety tips', error: e.message });
+  }
+});
+
 export default router;

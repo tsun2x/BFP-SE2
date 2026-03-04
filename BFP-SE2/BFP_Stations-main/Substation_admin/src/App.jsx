@@ -262,6 +262,8 @@ function AppContent() {
       }
 
       console.log('[Frontend] Received incoming-incident for this station:', data);
+      // ACK handshake: tell backend we received the incident so failover timer starts
+      socket.emit('incident-received', { alarmId: data.alarmId });
       const callObj = buildCallObj(data);
       addIncomingCallRef.current(callObj);
       addNotificationRef.current({
@@ -285,6 +287,28 @@ function AppContent() {
         rejectCallRef.current(alarmId);
       }
       try { if (twilioIncomingRef.current) twilioRejectRef.current(); } catch (e) { console.warn('[AutoReject] Twilio reject error:', e); }
+    });
+
+    // Firetruck status/alarm update from driver
+    socket.on('truck-status-update', (data) => {
+      try {
+        console.log('[Frontend] Received truck-status-update:', data);
+        const alarmText = data.alarmLevel || '';
+        const statusText = data.fireStatus || '';
+        const driverText = data.driverName || 'Unknown';
+        const truckText = data.truckId ? `Truck #${data.truckId}` : 'Firetruck';
+
+        addNotificationRef.current({
+          title: `${truckText} — ${statusText}`,
+          message: `${driverText} | Alarm: ${alarmText}`,
+          type: 'incident',
+        });
+        infoRef.current(
+          `${truckText} is now "${statusText}" | Alarm: ${alarmText} (${driverText})`,
+          undefined,
+          { sticky: false }
+        );
+      } catch (e) { console.error('[truck-status-update] handler error:', e); }
     });
 
     socket.on('disconnect', () => console.log('Socket disconnected'));

@@ -53,7 +53,7 @@ const uploadDataUrlToStorage = async (dataUrl, prefix = 'news') => {
   return data?.publicUrl || null;
 };
 
-// GET /api/news
+// GET /api/news (admin only)
 router.get('/news', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { data, error } = await supabase
@@ -69,6 +69,52 @@ router.get('/news', authenticateToken, requireAdmin, async (req, res) => {
     return res.json({ success: true, data: data || [] });
   } catch (e) {
     console.error('GET /news exception:', e);
+    return res.status(500).json({ success: false, message: 'Failed to fetch news', error: e.message });
+  }
+});
+
+// GET /api/public/news (published only, public)
+router.get('/public/news', async (_req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('news_room')
+      .select('id, title, description, headline_image, additional_images, author, published_at, date, slug, metadata')
+      .eq('published', true)
+      .order('published_at', { ascending: false });
+
+    if (error) {
+      console.error('GET /public/news error:', error);
+      return res.status(500).json({ success: false, message: 'Failed to fetch news', error: error.message });
+    }
+
+    return res.json({ success: true, data: data || [] });
+  } catch (e) {
+    console.error('GET /public/news exception:', e);
+    return res.status(500).json({ success: false, message: 'Failed to fetch news', error: e.message });
+  }
+});
+
+// GET /api/public/news/:id (published only, public)
+router.get('/public/news/:id', async (req, res) => {
+  try {
+    const id = req.params.id;
+    if (!id) return res.status(400).json({ success: false, message: 'Missing id' });
+
+    const { data, error } = await supabase
+      .from('news_room')
+      .select('id, title, description, headline_image, additional_images, author, published_at, date, slug, metadata')
+      .eq('published', true)
+      .eq('id', id)
+      .single();
+
+    if (error) {
+      console.error('GET /public/news/:id error:', error);
+      return res.status(404).json({ success: false, message: 'News not found', error: error.message });
+    }
+
+    return res.json({ success: true, data });
+  } catch (e) {
+    console.error('GET /public/news/:id exception:', e);
     return res.status(500).json({ success: false, message: 'Failed to fetch news', error: e.message });
   }
 });

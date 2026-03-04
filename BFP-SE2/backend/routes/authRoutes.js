@@ -525,6 +525,8 @@ router.post('/signup', async (req, res) => {
       role = 'admin';
     } else if (req.body.role === 'substation_admin' || req.body.stationType === 'Substation') {
       role = 'substation_admin';
+    } else if (req.body.role === 'driver') {
+      role = 'driver';
     }
 
     // Insert new user (include assigned_station_id if provided)

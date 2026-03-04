@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 import { Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { API_URL } from '../config';
 
 export type AuthUser = {
   id: number;
@@ -21,33 +22,43 @@ export type AuthContextType = {
   token: string | null;
   isLoading: boolean;
   login: (idNumber: string, password: string) => Promise<void>;
+  register: (data: RegisterData) => Promise<void>;
   logout: () => void;
 };
 
+export type RegisterData = {
+  firstName: string;
+  lastName: string;
+  idNumber: string;
+  rank: string;
+  password: string;
+};
+
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+const TOKEN_KEY = 'firetruck_token';
+const USER_KEY = 'firetruck_user';
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  const STORAGE_KEY = 'firetruck_local_user';
-
-  // Load any previously saved local user on app start
+  // Restore session on app start
   useEffect(() => {
-    const loadUser = async () => {
+    const restore = async () => {
       try {
-        const stored = await AsyncStorage.getItem(STORAGE_KEY);
-        if (stored) {
-          const parsed = JSON.parse(stored) as { user: AuthUser; password: string };
-          setUser(parsed.user);
-          setToken(null);
+        const storedToken = await AsyncStorage.getItem(TOKEN_KEY);
+        const storedUser = await AsyncStorage.getItem(USER_KEY);
+        if (storedToken && storedUser) {
+          setToken(storedToken);
+          setUser(JSON.parse(storedUser));
         }
-      } catch (error) {
+      } catch (e) {
         // ignore
       }
     };
-    loadUser();
+    restore();
   }, []);
 
   const login = async (idNumber: string, password: string) => {
@@ -56,44 +67,42 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
 
     setIsLoading(true);
-
     try {
-      // If a local user already exists, validate credentials against it
-      const existing = await AsyncStorage.getItem(STORAGE_KEY);
+      console.log('[Auth] LOGIN URL:', API_URL + '/api/login');
+      const res = await fetch(API_URL + '/api/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'ngrok-skip-browser-warning': 'true',
+        },
+        body: JSON.stringify({ idNumber, password }),
+      });
 
-      if (existing) {
-        const parsed = JSON.parse(existing) as { user: AuthUser; password: string };
-        if (parsed.user.idNumber === idNumber && parsed.password === password) {
-          setUser(parsed.user);
-          setToken(null);
-          return;
-        }
-        throw new Error('Invalid ID or password.');
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.message || 'Login failed');
       }
 
-      // No user saved yet: create one locally using the provided credentials
-      // e.g. first login with BFP-00009 / testpass321 will become the local account
-      const newUser: AuthUser = {
-        id: Date.now(),
-        idNumber,
-        name: idNumber,
-        firstName: null,
-        lastName: null,
-        rank: null,
-        substation: null,
-        role: 'driver',
-        assignedStationId: null,
-        stationName: null,
-        stationType: null,
+      const authUser: AuthUser = {
+        id: data.user.id,
+        idNumber: data.user.idNumber,
+        name: data.user.name,
+        firstName: data.user.firstName,
+        lastName: data.user.lastName,
+        rank: data.user.rank,
+        substation: data.user.substation,
+        role: data.user.role,
+        assignedStationId: data.user.assignedStationId,
+        stationName: data.user.stationInfo?.station_name || null,
+        stationType: data.user.stationInfo?.station_type || null,
       };
 
-      await AsyncStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify({ user: newUser, password }),
-      );
+      await AsyncStorage.setItem(TOKEN_KEY, data.token);
+      await AsyncStorage.setItem(USER_KEY, JSON.stringify(authUser));
 
-      setUser(newUser);
-      setToken(null);
+      setToken(data.token);
+      setUser(authUser);
     } catch (error: any) {
       const message = error?.message || 'Login failed. Please try again.';
       Alert.alert('Login failed', message);
@@ -103,14 +112,70 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const logout = () => {
+  const register = async (regData: RegisterData) => {
+    if (!regData.firstName || !regData.lastName || !regData.idNumber || !regData.rank || !regData.password) {
+      throw new Error('All fields are required.');
+    }
+
+    setIsLoading(true);
+    try {
+      console.log('[Auth] SIGNUP URL:', API_URL + '/api/signup');
+      const res = await fetch(API_URL + '/api/signup', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'ngrok-skip-browser-warning': 'true',
+        },
+        body: JSON.stringify({
+          firstName: regData.firstName,
+          lastName: regData.lastName,
+          idNumber: regData.idNumber,
+          rank: regData.rank,
+          password: regData.password,
+          role: 'driver',
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.message || 'Registration failed');
+      }
+
+      Alert.alert('Success', 'Account created! Please log in.');
+    } catch (error: any) {
+      const message = error?.message || 'Registration failed.';
+      Alert.alert('Registration failed', message);
+      throw new Error(message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const logout = async () => {
+    // Call backend logout if we have a token
+    if (token) {
+      try {
+        await fetch(API_URL + '/api/logout', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: 'Bearer ' + token,
+            'ngrok-skip-browser-warning': 'true',
+          },
+        });
+      } catch (e) {
+        // ignore
+      }
+    }
     setUser(null);
     setToken(null);
-     AsyncStorage.removeItem(STORAGE_KEY).catch(() => {});
+    await AsyncStorage.removeItem(TOKEN_KEY).catch(() => {});
+    await AsyncStorage.removeItem(USER_KEY).catch(() => {});
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, isLoading, login, logout }}>
+    <AuthContext.Provider value={{ user, token, isLoading, login, register, logout }}>
       {children}
     </AuthContext.Provider>
   );

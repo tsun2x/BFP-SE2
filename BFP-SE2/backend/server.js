@@ -14,6 +14,7 @@ import compatibilityRoutes from './routes/compatibilityRoutes.js';
 import firetruckTrackingRoutes from './routes/firetruckTrackingRoutes.js';
 import newsRoutes from './routes/newsRoutes.js';
 import safetyRoutes from './routes/safetyRoutes.js';
+import contactRoutes from './routes/contactRoutes.js';
 import messageRoutes from './routes/messageRoutes.js';
 import twilioCallbacksRoutes from './routes/twilioCallbacks.js';
 import twilioTokenRoutes from './routes/twilioTokenRoutes.js';
@@ -25,7 +26,7 @@ import {
   socketDisconnected,
   getOnlineStationsSummary
 } from './services/onlineStations.js';
-import { cancelFailover, getFailoverEntry } from './services/dispatchService.js';
+import { cancelFailover, getFailoverEntry, ackIncidentReceived } from './services/dispatchService.js';
 
 dotenv.config();
 
@@ -89,6 +90,14 @@ io.on('connection', (socket) => {
     }
     io.to('main-admin').emit('auto-reject', { alarmId });
     console.log(`[Socket] Sent auto-reject to main-admin (civilian cancelled)`);
+  });
+
+  // ── Station acknowledges it received the incident (handshake) ────────
+  socket.on('incident-received', (data) => {
+    const alarmId = data?.alarmId;
+    if (!alarmId) return;
+    console.log(`[Socket] Station acknowledged incident ${alarmId}`);
+    ackIncidentReceived(alarmId);
   });
 
   // ── New incident from mobile/station (both branches) ─────────────
@@ -163,6 +172,23 @@ io.on('connection', (socket) => {
     }
   });
 
+  // ── Firetruck driver room + status broadcasting ──────────────────
+  socket.on('join-truck', (data) => {
+    const truckId = data?.truckId;
+    if (truckId) {
+      socket.join(`truck-${truckId}`);
+      socket._truckId = truckId;
+      console.log(`[Socket] Truck ${truckId} joined room truck-${truckId} (socket ${socket.id})`);
+    }
+  });
+
+  // Driver broadcasts status/alarm update via socket (real-time, no REST needed)
+  socket.on('truck-status-update', (data) => {
+    console.log('[Socket] truck-status-update from driver:', JSON.stringify(data));
+    // Re-broadcast to all clients (admins, end-users, other trucks)
+    socket.broadcast.emit('truck-status-update', data);
+  });
+
   // ── Alarm subscription (both branches) ───────────────────────────
   socket.on('subscribe-to-alarm', (alarmId) => {
     console.log(`[Socket] Client ${socket.id} subscribed to alarm ${alarmId}`);
@@ -196,6 +222,9 @@ app.use('/api', newsRoutes);
 
 // Safety tips + categories routes (web admin — mine/UI-redesign)
 app.use('/api', safetyRoutes);
+
+// Emergency contacts routes
+app.use('/api', contactRoutes);
 
 // Incident routes
 app.use('/api', incidentRoutes);

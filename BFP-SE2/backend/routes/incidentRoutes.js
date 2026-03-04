@@ -2,7 +2,7 @@ import express from 'express';
 import { supabase } from '../supabaseClient.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { requireRoles, isAdminUser, getUserStationId } from '../middleware/role.js';
-import { acceptIncident, startFailover, getRankedStations, cancelFailover } from '../services/dispatchService.js';
+import { acceptIncident, startFailover, startMainAdminFailover, getRankedStations, cancelFailover } from '../services/dispatchService.js';
 import { getOnlineStationIds } from '../services/onlineStations.js';
 
 const router = express.Router();
@@ -244,15 +244,11 @@ const createIncidentHandler = async (req, res) => {
           }))
           .sort((a, b) => a.distance - b.distance);
 
-        // Prefer online stations; fall back to all eligible if none online
+        // Only dispatch to ONLINE stations (skip offline ones entirely)
         const onlineEligible = allEligible.filter((s) => onlineIds.has(s.station_id));
-        const scored = onlineEligible.length > 0 ? onlineEligible : allEligible;
+        const scored = onlineEligible;
 
-        if (onlineEligible.length > 0) {
-          console.log(`[KNN] Dispatching from ${onlineEligible.length} ONLINE station(s)`);
-        } else {
-          console.warn(`[KNN] No online stations — falling back to all ${allEligible.length} eligible station(s)`);
-        }
+        console.log(`[KNN] ${scored.length} online substation(s) out of ${allEligible.length} total eligible`);
 
         if (scored.length > 0) {
           const nearest = scored[0];
@@ -298,7 +294,48 @@ const createIncidentHandler = async (req, res) => {
             coordinates: { latitude, longitude },
           });
         } else {
-          console.warn('[KNN] No eligible stations found');
+          // No online substations — dispatch directly to main admin
+          console.log('[KNN] No online substations. Dispatching directly to MAIN ADMIN.');
+          dispatchedStationId = null;
+          stationName = 'Central Fire Station (Main)';
+          const io = req.app.get('io');
+          if (io) {
+            io.to(`alarm-${alarmId}`).emit('failover-redirect', {
+              alarmId,
+              fromStationId: null,
+              toStationId: 'main',
+              toStationName: 'Central Fire Station (Main)',
+            });
+            io.to('main-admin').emit('incoming-incident', {
+              alarmId,
+              callerId,
+              phoneNumber,
+              firstName: firstName || null,
+              lastName: lastName || null,
+              incidentType: incidentType || null,
+              alarmLevel: alarmLevelEnum,
+              location: location || null,
+              narrative: narrative || null,
+              coordinates: { latitude, longitude },
+              assignedStationId: 'main',
+              stationName: 'Central Fire Station (Main)',
+              failover: true,
+            });
+            console.log(`[KNN] Main admin notified for alarm ${alarmId}`);
+
+            // Start a cancellable failover timer for main admin
+            startMainAdminFailover(alarmId, io, {
+              callerId,
+              phoneNumber,
+              firstName,
+              lastName,
+              incidentType,
+              alarmLevel: alarmLevelEnum,
+              location,
+              narrative,
+              coordinates: { latitude, longitude },
+            });
+          }
         }
       }
     } catch (knnErr) {

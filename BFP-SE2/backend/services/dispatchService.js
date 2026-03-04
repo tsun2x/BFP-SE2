@@ -275,3 +275,41 @@ export async function getRankedStations(latitude, longitude) {
     }))
     .sort((a, b) => a.distance - b.distance);
 }
+
+// ── Start failover timer for main admin only (no substations) ──────────
+// Properly tracked in failoverTimers so cancelFailover works on accept.
+export function startMainAdminFailover(alarmId, io, alarmMeta = {}) {
+  cancelFailover(alarmId); // clear any existing timer
+
+  const timerId = setTimeout(() => {
+    failoverTimers.delete(alarmId);
+    flog(`alarm ${alarmId}: MAIN ADMIN TIMEOUT — no one answered. Emitting failover-exhausted.`);
+    io.to('main-admin').emit('auto-reject', { alarmId });
+    io.to(`alarm-${alarmId}`).emit('failover-exhausted', { alarmId });
+  }, FAILOVER_TIMEOUT_MS);
+
+  failoverTimers.set(alarmId, { timerId, stationId: 'main', remaining: [] });
+  flog(`alarm ${alarmId}: ⏱ Timer started → MAIN ADMIN (direct, ${FAILOVER_TIMEOUT_MS / 1000}s)`);
+}
+
+// ── Acknowledge handshake: station confirms it received the incident ───
+// Called when a station emits 'incident-received'. Starts the failover timer.
+// Before this ack, no failover timer is running (grace period for connection).
+export function ackIncidentReceived(alarmId) {
+  const entry = failoverTimers.get(alarmId);
+  if (entry && entry.ackPending) {
+    clearTimeout(entry.ackTimeoutId);
+    entry.ackPending = false;
+    flog(`alarm ${alarmId}: ✓ ACK received from station ${entry.stationId}. Starting ${FAILOVER_TIMEOUT_MS / 1000}s failover timer.`);
+
+    // Now start the real failover timer
+    const timerId = setTimeout(async () => {
+      failoverTimers.delete(alarmId);
+      // Re-run the failover logic (same as the existing timer callback)
+      entry.timerCallback();
+    }, FAILOVER_TIMEOUT_MS);
+
+    entry.timerId = timerId;
+  }
+}
+

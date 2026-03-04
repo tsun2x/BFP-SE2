@@ -197,4 +197,115 @@ router.get('/firetrucks/current-alarm', authenticateToken, requireRoles(['admin'
   }
 });
 
+// PUT /api/firetrucks/status
+// Driver updates their truck's alarm level and/or fire status.
+// Broadcasts the update via Socket.IO to all admins and end-users.
+router.put('/firetrucks/status', authenticateToken, requireRoles(['admin', 'substation_admin', 'driver']), async (req, res) => {
+  try {
+    const {
+      truck_id,
+      alarm_id,
+      alarm_level,
+      fire_status,
+      latitude,
+      longitude,
+      driver_name,
+    } = req.body;
+
+    if (!truck_id) {
+      return res.status(400).json({ success: false, error: 'truck_id is required' });
+    }
+
+    // Upsert into firetruck_status table (live status, one row per truck)
+    const payload = {
+      truck_id,
+      alarm_id: alarm_id ?? null,
+      alarm_level: alarm_level ?? null,
+      fire_status: fire_status ?? null,
+      latitude: latitude ?? null,
+      longitude: longitude ?? null,
+      driver_name: driver_name ?? req.user?.name ?? null,
+      updated_at: new Date().toISOString(),
+    };
+
+    // Try update first, then insert if not exists
+    const { data: existing } = await supabase
+      .from('firetruck_status')
+      .select('id')
+      .eq('truck_id', truck_id)
+      .maybeSingle();
+
+    let result;
+    if (existing) {
+      const { data, error } = await supabase
+        .from('firetruck_status')
+        .update(payload)
+        .eq('truck_id', truck_id)
+        .select('*')
+        .single();
+      if (error) throw error;
+      result = data;
+    } else {
+      const { data, error } = await supabase
+        .from('firetruck_status')
+        .insert([payload])
+        .select('*')
+        .single();
+      if (error) throw error;
+      result = data;
+    }
+
+    // Also update the _alarms table current_alarm_level if we have an alarm_id
+    if (alarm_id && alarm_level) {
+      await supabase
+        .from('_alarms')
+        .update({ current_alarm_level: alarm_level })
+        .eq('alarm_id', alarm_id)
+        .then(({ error }) => {
+          if (error) console.error('[firetrucks/status] Failed to update _alarms alarm level:', error.message);
+        });
+    }
+
+    // Broadcast to everyone via Socket.IO
+    const io = req.app.get('io');
+    if (io) {
+      const broadcast = {
+        truckId: truck_id,
+        alarmId: alarm_id,
+        alarmLevel: alarm_level,
+        fireStatus: fire_status,
+        latitude,
+        longitude,
+        driverName: payload.driver_name,
+        updatedAt: payload.updated_at,
+      };
+      io.emit('truck-status-update', broadcast);
+      console.log('[firetrucks/status] Broadcasted truck-status-update:', JSON.stringify(broadcast));
+    }
+
+    return res.json({ success: true, data: result });
+  } catch (error) {
+    console.error('PUT /firetrucks/status error:', error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// GET /api/firetrucks/active
+// Returns all active firetrucks with their current status (for map display)
+router.get('/firetrucks/active', async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('firetruck_status')
+      .select('*')
+      .order('updated_at', { ascending: false });
+
+    if (error) throw error;
+
+    return res.json({ success: true, data: data || [] });
+  } catch (error) {
+    console.error('GET /firetrucks/active error:', error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 export default router;

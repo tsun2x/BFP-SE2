@@ -19,7 +19,7 @@ export default function Sidebar() {
     <aside className="sidebar">
 
       {/* Logo / Avatar */}
-      <div className="station-name">Branch BFP</div>
+      <div className="station-name">BFP Substation</div>
 
       <hr className="station-divider" />
 

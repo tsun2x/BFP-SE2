@@ -1,6 +1,6 @@
 
 import "../style/officers.css";
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import apiClient from "../utils/apiClient";
 
@@ -78,8 +78,27 @@ export default function OfficerLogInHistory() {
   }, {});
 
   const stationGroups = Object.values(groupedByStation).sort((a, b) => {
+    // Priority: Central Firestation first, then substations, then others alphabetically
     const aName = a.station_name ?? "";
     const bName = b.station_name ?? "";
+    
+    // Check if either is Central Firestation
+    const aIsCentral = aName.toLowerCase().includes("central") || aName.toLowerCase().includes("main");
+    const bIsCentral = bName.toLowerCase().includes("central") || bName.toLowerCase().includes("main");
+    
+    // Check if either is a substation
+    const aIsSubstation = aName.toLowerCase().includes("substation");
+    const bIsSubstation = bName.toLowerCase().includes("substation");
+    
+    // If one is central, it comes first
+    if (aIsCentral && !bIsCentral) return -1;
+    if (!aIsCentral && bIsCentral) return 1;
+    
+    // If one is substation and the other is not (but neither is central)
+    if (aIsSubstation && !bIsSubstation) return -1;
+    if (!aIsSubstation && bIsSubstation) return 1;
+    
+    // Otherwise, sort alphabetically within the same category
     if (aName && bName) return aName.localeCompare(bName);
     if (aName) return -1;
     if (bName) return 1;
@@ -161,49 +180,78 @@ export default function OfficerLogInHistory() {
         </div>
       </div>
 
+      {/* SEPARATOR BETWEEN SEARCH AND CONTENT */}
+      <div className="search-content-separator">
+        <div className="separator-line"></div>
+      </div>
+
       {/* TABLE */}
-      <div className="officer-table-card">
+      <div className="officer-table-container">
         {loading ? (
           <div>Loading...</div>
         ) : (
-          <div>
-            {stationGroups.map((group) => (
-              <div key={group.station_id ?? "unassigned"} style={{ marginBottom: 24 }}>
-                <h3 style={{ margin: "0 0 12px" }}>
-                  {group.station_name || "Unassigned Station"}
-                  {group.station_name ? "" : group.station_id ? ` (Station ID: ${group.station_id})` : ""}
-                </h3>
+          <div className="stations-list">
+            {stationGroups.map((group, index) => {
+              const groupName = group.station_name || "Unassigned Station";
+              const isCentral = groupName.toLowerCase().includes("central") || groupName.toLowerCase().includes("main");
+              const isSubstation = groupName.toLowerCase().includes("substation");
+              const prevGroup = stationGroups[index - 1];
+              const prevGroupName = prevGroup?.station_name || "";
+              const prevWasCentral = prevGroupName.toLowerCase().includes("central") || prevGroupName.toLowerCase().includes("main");
+              
+              return (
+                <React.Fragment key={group.station_id ?? "unassigned"}>
+                  {/* Add substation separator after central fire station */}
+                  {prevWasCentral && !isCentral && (
+                    <div className="station-separator">
+                      <div className="separator-line"></div>
+                      <div className="separator-text">SUBSTATIONS</div>
+                      <div className="separator-line"></div>
+                    </div>
+                  )}
+                  
+                  <div className="station-container">
+                    <div className="station-header">
+                      <h3>
+                        {group.station_name || "Unassigned Station"}
+                        {group.station_name ? "" : group.station_id ? ` (Station ID: ${group.station_id})` : ""}
+                      </h3>
+                    </div>
 
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Login Time</th>
-                      <th>Logout Time</th>
-                      <th>Name</th>
-                      <th>Rank</th>
-                      <th>Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {group.rows.map((officer) => (
-                      <tr key={officer.id}>
-                        <td>{officer.login_time ? new Date(officer.login_time).toLocaleString() : "—"}</td>
-                        <td>{officer.logout_time ? new Date(officer.logout_time).toLocaleString() : "—"}</td>
-                        <td>{officer.users?.full_name || "—"}</td>
-                        <td>{officer.users?.rank || "—"}</td>
-                        <td>
-                          <span
-                            className={`officer-status-badge officer-status-${(officer.status || "").toLowerCase()}`}
-                          >
-                            {officer.status}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ))}
+                    <div className="station-table-wrapper">
+                      <table className="officer-table">
+                        <thead>
+                          <tr>
+                            <th>Login Time</th>
+                            <th>Logout Time</th>
+                            <th>Name</th>
+                            <th>Rank</th>
+                            <th>Status</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {group.rows.map((officer) => (
+                            <tr key={officer.id}>
+                              <td>{officer.login_time ? new Date(officer.login_time).toLocaleString() : "—"}</td>
+                              <td>{officer.logout_time ? new Date(officer.logout_time).toLocaleString() : "—"}</td>
+                              <td>{officer.users?.full_name || "—"}</td>
+                              <td>{officer.users?.rank || "—"}</td>
+                              <td>
+                                <span
+                                  className={`officer-status-badge officer-status-${(officer.status || "").toLowerCase()}`}
+                                >
+                                  {officer.status}
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </React.Fragment>
+              );
+            })}
           </div>
         )}
       </div>

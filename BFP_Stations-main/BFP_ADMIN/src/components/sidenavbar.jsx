@@ -16,6 +16,9 @@ export default function Sidebar() {
 
       {/* Logo / Avatar */}
       <div className="station-name">Zamboanga Central<br />Fire Station</div>
+      
+      {/* Separator after station name */}
+      <div className="station-divider"></div>
 
       {/* MAIN NAVIGATION */}
       <nav className="nav">

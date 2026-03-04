@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useContext } from 'react'
-import '../style/content.css'
+import '../style/contentmanagement.css'
 import '../style/newsroom.css'
+import '../style/safetytips.css'
+import '../style/emergencycontacts.css'
 import '../style/modals.css'
 import '../style/NRmodals.css'
 import { AuthContext } from '../context/AuthContext'
@@ -15,6 +17,25 @@ function ContentManagement() {
   const [openSections, setOpenSections] = useState({})
   const [safetyTips, setSafetyTips] = useState([])
   const [safetyCategories, setSafetyCategories] = useState([])
+  const [selectedCategoryId, setSelectedCategoryId] = useState(null)
+  const [sidePanelOpen, setSidePanelOpen] = useState(false)
+  
+  // Computed values for selected category
+  const selectedCategory = safetyCategories.find(c => c.id === selectedCategoryId)
+  const selectedTips = selectedCategory && Array.isArray(safetyTips)
+    ? safetyTips.filter((t) => t.category_id === selectedCategoryId)
+    : []
+
+  // Side panel functions
+  const openSidePanel = (category) => {
+    setSelectedCategoryId(category.id)
+    setSidePanelOpen(true)
+  }
+
+  const closeSidePanel = () => {
+    setSidePanelOpen(false)
+    setSelectedCategoryId(null)
+  }
 
   const toggleSection = (section) => {
     setOpenSections((prev) => ({ ...prev, [section]: !prev[section] }))
@@ -53,6 +74,16 @@ function ContentManagement() {
         additionalImages: [...(prev.additionalImages || []), ...images]
       }))
     })
+  }
+
+  const handleCategoryImageUpload = (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onloadend = () => {
+      setCategoryForm((prev) => ({ ...prev, image: reader.result }))
+    }
+    reader.readAsDataURL(file)
   }
 
   const fetchSafetyTips = async () => {
@@ -289,21 +320,16 @@ function ContentManagement() {
     setCategoryModalOpen(true)
   }
 
-  const openEditCategoryModal = (categoryKey) => {
-    if (!Array.isArray(safetyTips)) {
-      showNotification('error', 'Safety tips data is not available')
-      return
-    }
-    const category = null
+  const openEditCategoryModal = (category) => {
     if (!category) {
-      showNotification('error', 'Category editing is not available right now')
+      showNotification('error', 'Category not found')
       return
     }
     setCategoryForm({ 
-      name: categoryKey.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()), 
+      name: category.name || '', 
       color: category.color || '#f8d7da', 
-      image: category.image || null,
-      editingKey: categoryKey 
+      image: category.image_url || null,
+      editingKey: category.id 
     })
     setCategoryModalOpen(true)
   }
@@ -326,12 +352,20 @@ function ContentManagement() {
         image_url: categoryForm.image || null,
       }
 
-      await apiClient.post('/safety-tip-categories', payload)
-      showNotification('success', 'Category added successfully')
+      if (categoryForm.editingKey) {
+        // Update existing category
+        await apiClient.put(`/safety-tip-categories/${categoryForm.editingKey}`, payload)
+        showNotification('success', 'Category updated successfully')
+      } else {
+        // Create new category
+        await apiClient.post('/safety-tip-categories', payload)
+        showNotification('success', 'Category added successfully')
+      }
+      
       closeCategoryModal()
       fetchSafetyCategories()
     } catch (err) {
-      showNotification('error', 'Failed to add category.');
+      showNotification('error', `Failed to ${categoryForm.editingKey ? 'update' : 'add'} category.`);
     }
     setIsLoading(false);
   }
@@ -364,6 +398,12 @@ function ContentManagement() {
   
   const [ecForm, setEcForm] = useState({ category: '', station: '', hotline: '', location: '' })
   const [ecSearch, setEcSearch] = useState('')
+  
+  // Filter contacts based on search
+  const filteredContacts = contacts.filter((c) => {
+    const q = ecSearch.toLowerCase()
+    return [c.category, c.station, c.hotline, c.location].some((v) => v.toLowerCase().includes(q))
+  })
   const [editingId, setEditingId] = useState(null)
   const [ecModalOpen, setEcModalOpen] = useState(false)
   
@@ -430,8 +470,7 @@ function ContentManagement() {
     )
   }
 
-  const sortedContacts = [...contacts].sort((a, b) => a.station.localeCompare(b.station))
-
+  
   // Open add tip modal for specific section
   const openAddTip = (category) => {
     setSafetyForm({ open: true, section: category?.name || 'general', categoryId: category?.id ?? null, id: null, task: '', desc: '', image: null })
@@ -521,74 +560,148 @@ function ContentManagement() {
         {activeTab === 'safety' && (
           <>
             <div className="cm-card-head">
-              <div className="cm-card-title">
-                <h2>Safety Tips management</h2>
-                <p>Manage and publish essential fire safety guidelines for public awareness.</p>
-              </div>
+              <h2>Safety Tips</h2>
+              <p className="cm-description">Manage safety tips and categories for fire prevention and emergency preparedness guidelines</p>
             </div>
-            <div className="cm-search-and-add">
-              <div className="cm-search">
-                <span className="cm-search-icon" />
-                <input className="cm-search-input" placeholder="Search" value={safetySearch} onChange={(e)=>setSafetySearch(e.target.value)} />
+            <div className="st-header">
+              <div className="st-search">
+                <span className="st-search-icon">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <circle cx="11" cy="11" r="8"/>
+                    <path d="m21 21-4.35-4.35"/>
+                  </svg>
+                </span>
+                <input className="st-search-input" placeholder="Search safety tips..." value={safetySearch} onChange={(e)=>setSafetySearch(e.target.value)} />
               </div>
-              <button className="cm-small-btn cm-small-btn--outline" onClick={openCategoryModal}>+ Add Category</button>
+              <button className="st-add-category-btn" onClick={openCategoryModal}>+ Add Category</button>
             </div>
-            <div className="cm-accordion">
+            
+            {/* SEPARATOR BETWEEN SEARCH AND CONTENT */}
+            <div className="search-content-separator">
+              <div className="separator-line"></div>
+            </div>
+            
+            <div className="st-categories-grid">
               {safetyCategories.map((category) => {
                 const tips = Array.isArray(safetyTips)
                   ? safetyTips.filter((t) => t.category_id === category.id)
                   : []
-                const sectionKey = String(category.id)
                 return (
-                  <div className="cm-section" key={category.id}>
-                    <div className="cm-section-bar" style={{ background: category.color || '#f5f5f5' }}>
-                      <button className="cm-section-toggle" onClick={() => toggleSection(sectionKey)} aria-expanded={openSections[sectionKey]}>
-                      <span className={openSections[sectionKey] ? 'cm-caret-down' : 'cm-caret-right'} />
-                    </button>
-                    <div className="cm-section-title">
-                      <strong>{category.name}</strong>
-                      <span className="cm-section-meta">{tips.length} tasks</span>
+                  <div key={category.id} className="st-category-card" onClick={() => openSidePanel(category)}>
+                    <div className="st-category-image" style={{ 
+                      backgroundImage: category.image_url ? `url(${category.image_url})` : 'none',
+                      backgroundColor: category.color || '#6c757d'
+                    }}>
+                      <div className="st-category-actions">
+                        <button 
+                          className="st-category-btn edit" 
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            openEditCategoryModal(category)
+                          }}
+                          title="Edit Category"
+                        >
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                          </svg>
+                        </button>
+                        <button 
+                          className="st-category-btn delete" 
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            deleteCategory(category.id)
+                          }}
+                          title="Delete Category"
+                        >
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <polyline points="3,6 5,6 21,6"/>
+                            <path d="M19,6v14a2,2 0 0,1-2,2H7a2,2 0 0,1-2-2V6m3,0V4a2,2 0 0,1 2-2h4a2,2 0 0,1 2,2v2"/>
+                          </svg>
+                        </button>
+                      </div>
                     </div>
-                    {/* Actions can be added here if needed */}
-                    <div className="cm-section-actions">
-                      <button className="cm-small-btn cm-small-btn--outline" onClick={() => openAddTip(category)}>+ Add Safety tips</button>
+                    <div className="st-category-content">
+                      <h3 className="st-category-title">{category.name}</h3>
+                      <p className="st-category-count">{tips.length} safety tips</p>
                     </div>
                   </div>
-                  {openSections[sectionKey] && (
-                    <div className="cm-table">
-                      <div className="cm-thead">
-                        <div className="cm-th">Task Name</div>
-                        <div className="cm-th">Description</div>
-                        <div className="cm-th cm-th-actions">Actions</div>
-                      </div>
-                      <div className="cm-tbody">
-                        {filterTips(tips).map((row) => (
-                          <div key={`${category.id}-${row.id}`} className="cm-tr">
-                            <div className="cm-td">{row.task}</div>
-                            <div className="cm-td">{row.description}</div>
-                            <div className="cm-td cm-actions">
-                              <button className="cm-btn cm-btn--dark" onClick={() => openEditTip(row)}>Edit</button>
-                              <button className="cm-btn cm-btn--danger" onClick={() => deleteTip(row.id)}>Delete</button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
                 )
               })}
             </div>
+            
+            {safetyCategories.length === 0 && (
+              <div className="st-empty-state">
+                <h3>No categories yet</h3>
+                <p>Create your first safety tips category to get started</p>
+              </div>
+            )}
+            
+            {/* Side Panel */}
+            {sidePanelOpen && (
+              <>
+                <div className="st-side-panel-overlay open" onClick={closeSidePanel}></div>
+                <div className="st-side-panel open">
+                  <div className="st-side-panel-header">
+                    <h2 className="st-side-panel-title">{selectedCategory?.name}</h2>
+                    <button className="st-side-panel-close" onClick={closeSidePanel}>×</button>
+                  </div>
+                  <div className="st-side-panel-body">
+                    <div className="st-tips-grid">
+                      {filterTips(selectedTips).map((tip) => (
+                        <div key={tip.id} className="st-tip-card">
+                          <div className="st-tip-card-header">
+                            <h3 className="st-tip-task">{tip.task}</h3>
+                            <div className="st-tip-actions">
+                              <button 
+                                className="st-tip-action-btn edit"
+                                onClick={() => openEditTip(tip)}
+                                title="Edit Tip"
+                              >
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                                </svg>
+                              </button>
+                              <button 
+                                className="st-tip-action-btn delete"
+                                onClick={() => deleteTip(tip.id)}
+                                title="Delete Tip"
+                              >
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                  <polyline points="3,6 5,6 21,6"/>
+                                  <path d="M19,6v14a2,2 0 0,1-2,2H7a2,2 0 0,1-2-2V6m3,0V4a2,2 0 0,1 2-2h4a2,2 0 0,1 2,2v2"/>
+                                </svg>
+                              </button>
+                            </div>
+                          </div>
+                          <p className="st-tip-description">{tip.description}</p>
+                        </div>
+                      ))}
+                      {selectedTips.length === 0 && (
+                        <div className="st-empty-state">
+                          <h3>No safety tips yet</h3>
+                          <p>Add your first safety tip to this category</p>
+                        </div>
+                      )}
+                    </div>
+                    <button className="st-add-tip-btn" onClick={() => openAddTip(selectedCategory)}>
+                      + Add Safety Tip
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
           </>
         )}
         {activeTab === 'news' && (
           <>
           {/*News room*/}
             <div className="nr-list-head">
-              <div className="nr-list-title">
-                <h2>News Room</h2>
-                <p>For posting general articles, announcements, and updates from BFP</p>
-              </div>
+              <div className="cm-card-head">
+              <h2>News Room</h2>
+              <p className="cm-description">For posting general articles, announcements, and updates from BFP</p>
+            </div>
             </div>
             <div className="nr-list-toolbar">
               <div className="cm-search">
@@ -620,6 +733,12 @@ function ContentManagement() {
               </div>
               <button className="cm-small-btn cm-small-btn--outline" onClick={openAddNews}>+ Add news</button>
             </div>
+            
+            {/* SEPARATOR BETWEEN SEARCH AND CONTENT */}
+            <div className="search-content-separator">
+              <div className="separator-line"></div>
+            </div>
+            
             <div className="nr-grid">
               {getFilteredNewsItems().map((n) => (
                 <div key={n.id} className="nr-card" onClick={() => showNewsContent(n)}>
@@ -661,37 +780,92 @@ function ContentManagement() {
         {activeTab === 'contacts' && (
           <>
             <div className="cm-card-head">
-              <div className="cm-card-title">
-                <h2>Emergency Contacts</h2>
-                <p>For updating and managing official contact numbers and emergency hotlines</p>
-              </div>
+              <h2>Emergency Contacts</h2>
+              <p className="cm-description">Manage emergency contact information including hotlines, stations, and response teams</p>
             </div>
-            <div style={{ textAlign: 'right', marginBottom: '16px' }}>
-              <button className="cm-small-btn cm-small-btn--outline" onClick={() => { setEditingId(null); setEcForm({ category: '', station: '', hotline: '', location: '' }); setEcModalOpen(true) }}>+ Add Contact</button>
-            </div>
-            <div className="ec-table">
-              <div className="ec-thead">
-                <div className="ec-th">Category</div>
-                <div className="ec-th">Station</div>
-                <div className="ec-th">Hotline Number</div>
-                <div className="ec-th">Location</div>
-                <div className="ec-th ec-th-actions">Actions</div>
+            <div className="ec-header">
+              <div className="ec-search">
+                <span className="ec-search-icon">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <circle cx="11" cy="11" r="8"/>
+                    <path d="m21 21-4.35-4.35"/>
+                  </svg>
+                </span>
+                <input className="ec-search-input" placeholder="Search contacts..." value={ecSearch} onChange={(e)=>setEcSearch(e.target.value)} />
               </div>
-              <div className="ec-tbody">
-                {sortedContacts.map((c) => (
-                  <div key={c.id} className="ec-tr">
-                    <div className="ec-td">{c.category}</div>
-                    <div className="ec-td">{c.station}</div>
-                    <div className="ec-td">{c.hotline}</div>
-                    <div className="ec-td">{c.location}</div>
-                    <div className="ec-td ec-actions">
-                      <button className="cm-btn cm-btn--dark" onClick={() => editContact(c)}>Edit</button>
-                      <button className="cm-btn cm-btn--danger" onClick={() => deleteContact(c.id)}>Delete</button>
+              <button className="ec-add-contact-btn" onClick={() => { setEditingId(null); setEcForm({ category: '', station: '', hotline: '', location: '' }); setEcModalOpen(true) }}>+ Add Contact</button>
+            </div>
+            
+            {/* SEPARATOR BETWEEN SEARCH AND CONTENT */}
+            <div className="search-content-separator">
+              <div className="separator-line"></div>
+            </div>
+            
+            <div className="ec-grid">
+              {filteredContacts.map((c) => (
+                <div key={c.id} className="ec-card">
+                  <div className="ec-card-header">
+                    <div className="ec-card-icon">
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.89 19.38 19.38 0 0 0 6.41 6.41 19.38 19.38 0 0 0 6.41 6.41A2 2 0 0 1 22 16.92z"/>
+                        <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12"/>
+                        <line x1="10" y1="6" x2="18" y2="6"/>
+                        <line x1="10" y1="10" x2="18" y2="10"/>
+                      </svg>
+                    </div>
+                    <div className="ec-card-title">
+                      <div className="ec-card-category">{c.category}</div>
+                      <div className="ec-card-station">{c.station}</div>
                     </div>
                   </div>
-                ))}
-              </div>
+                  
+                  <div className="ec-card-body">
+                    <div className="ec-info-row">
+                      <span className="ec-info-icon">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.89 19.38 19.38 0 0 0 6.41 6.41 19.38 19.38 0 0 0 6.41 6.41A2 2 0 0 1 22 16.92z"/>
+                          <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12"/>
+                          <line x1="10" y1="6" x2="18" y2="6"/>
+                          <line x1="10" y1="10" x2="18" y2="10"/>
+                        </svg>
+                      </span>
+                      <span className="ec-info-text">{c.hotline}</span>
+                    </div>
+                    <div className="ec-info-row">
+                      <span className="ec-info-icon">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+                          <path d="M3.05 11a9 9 0 0 0 9 7.94"/>
+                        </svg>
+                      </span>
+                      <span className="ec-info-text">{c.location}</span>
+                    </div>
+                  </div>
+                  
+                  <div className="ec-card-actions">
+                    <button className="ec-action-btn edit" onClick={() => editContact(c)} title="Edit Contact">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                      </svg>
+                    </button>
+                    <button className="ec-action-btn delete" onClick={() => deleteContact(c.id)} title="Delete Contact">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <polyline points="3,6 5,6 21,6"/>
+                        <path d="M19,6v14a2,2 0 0,1-2,2H7a2,2 0 0,1-2-2V6m3,0V4a2,2 0 0,1 2-2h4a2,2 0 0,1 2,2v2"/>
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              ))}
             </div>
+            
+            {contacts.length === 0 && (
+              <div className="ec-empty-state">
+                <h3>No emergency contacts yet</h3>
+                <p>Add your first emergency contact to get started</p>
+              </div>
+            )}
           </>
         )}
 
@@ -822,9 +996,12 @@ function ContentManagement() {
                   onChange={handleHeadlineImageUpload}
                 />
                 {newsForm.headlineImage && (
-                  <button type="button" className="nr-drop-remove" aria-label="remove" onClick={(e) => { e.stopPropagation(); removeHeadlineImage(); }}>
-                    Remove
-                  </button>
+                  <div className="image-preview">
+                    <img src={newsForm.headlineImage} alt="Headline preview" />
+                    <button type="button" className="remove-image-btn" onClick={(e) => { e.stopPropagation(); removeHeadlineImage(); }}>
+                      <i className="fa-solid fa-times"></i>
+                    </button>
+                  </div>
                 )}
               </div>
               <div className="nr-field">
@@ -1020,16 +1197,7 @@ function ContentManagement() {
                   <input 
                     type="file" 
                     accept="image/*" 
-                    onChange={(e) => {
-                      const file = e.target.files[0]
-                      if (file) {
-                        const reader = new FileReader()
-                        reader.onloadend = () => {
-                          setCategoryForm({...categoryForm, image: reader.result})
-                        }
-                        reader.readAsDataURL(file)
-                      }
-                    }}
+                    onChange={handleCategoryImageUpload}
                     style={{ display: 'none' }}
                     id="category-image-upload"
                   />

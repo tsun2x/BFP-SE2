@@ -1,7 +1,7 @@
 /* ===== PAGE LAYOUT ===== */
 .status-page {
   padding: 30px 40px;
-  background: #f4f4f49d;
+  background: white;
   min-height: 100vh;
   font-family: 'Poppins', sans-serif;
   color: #222;
@@ -9,19 +9,20 @@
 
 /* ===== HEADER ===== */
 .page-header {
-  margin-bottom: 25px;
+  margin-bottom: 20px;
 }
 
 .page-title {
   font-size: 28px;
   font-weight: 700;
   color: #b30000; /* BFP RED */
+  margin-bottom: 0;
 }
 
 .page-subtitle {
   color: #666;
   font-size: 14px;
-  margin-top: 4px;
+  margin-top: 0;
 }
 
 /* ===== ERROR ===== */
@@ -62,6 +63,7 @@
   align-items: center;
   box-shadow: 0 4px 12px rgba(0,0,0,0.08);
   transition: 0.2s ease;
+  border: 1px solid #d1d5db;
 }
 
 .summary-card:hover {
@@ -71,8 +73,16 @@
 .card-icon {
   background: #b30000;
   color: white;
-  padding: 10px;
+  padding: 12px;
   border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.card-icon svg {
+  width: 20px;
+  height: 20px;
 }
 
 .card-content h3 {
@@ -89,8 +99,8 @@
 
 .summary-divider {
   border: none;
-  border-top: 1px solid #ddd;
-  margin: 25px 0;
+  border-top: 1px solid #666;
+  margin: 50px 0;
 }
 
 /* ===== STATE MESSAGE ===== */
@@ -105,17 +115,71 @@
 .stations-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 22px;
+  gap: 40px;
+}
+
+/* ===== STATION HEADER ===== */
+.station-header {
+  background: #550816;
+  color: white;
+  padding: 16px 20px;
+}
+
+/* DYNAMIC STATION HEADER COLORS */
+.status-page .station-card.ready .station-header {
+  background: #2e7d32 !important;
+  color: white !important;
+  font-weight: 700;
+  font-size: 20px;
+}
+
+.status-page .station-card.ready .station-header h2 {
+  color: white !important;
+}
+
+.status-page .station-card.partially_ready .station-header {
+  background: #ff9800 !important;
+  color: white !important;
+  font-weight: 700;
+  font-size: 20px;
+}
+
+.status-page .station-card.partially_ready .station-header h2 {
+  color: white !important;
+}
+
+.status-page .station-card.not_ready .station-header {
+  background: #b30000 !important;
+  color: white !important;
+  font-weight: 700;
+  font-size: 20px;
+}
+
+.status-page .station-card.not_ready .station-header h2 {
+  color: white !important;
+}
+
+.status-page .station-card.unknown .station-header {
+  background: #706b68 !important;
+  color: white !important;
+  font-weight: 700;
+  font-size: 20px;
+}
+
+.status-page .station-card.unknown .station-header h2 {
+  color: white !important;
 }
 
 /* ===== STATION CARD ===== */
 .station-card {
   background: white;
-  border-radius: 16px;
+  border-radius: 8px;
   padding: 20px;
   box-shadow: 0 6px 18px rgba(0,0,0,0.08);
   transition: 0.25s ease;
-  border-top: 6px solid #ccc;
+  border: 2px solid #ccc;
+  margin-bottom: 20px;
+  border: 2px solid #d1d5db;
 }
 
 .station-card:hover {
@@ -143,6 +207,25 @@
   margin: 0;
   font-size: 18px;
   font-weight: 600;
+  color: #000000;
+}
+
+.station-type {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: white;
+}
+
+.main-badge {
+  background: #ff6b6b;
+  color: white;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1px;
 }
 
 .station-header small {
@@ -157,12 +240,12 @@
   border-radius: 999px;
   font-size: 12px;
   font-weight: 600;
-  margin: 10px 0;
+  margin: 15px 0;
 }
 
 .status-badge.ready {
-  background: #e8f5e9;
-  color: #2e7d32;
+  background: #424c3f;
+  color: white;
 }
 
 .status-badge.partially_ready {
@@ -182,7 +265,7 @@
 
 /* ===== READINESS ===== */
 .readiness-info {
-  margin-top: 10px;
+  margin-top: 15px;
 }
 
 .readiness-top {
@@ -205,6 +288,24 @@
   background: linear-gradient(90deg, #b30000, #ff4d4d);
   border-radius: 8px;
   transition: width 0.4s ease;
+  border: 1px solid #ddd;
+}
+
+/* DYNAMIC PROGRESS BAR COLORS */
+.station-card.ready .readiness-bar {
+  background: linear-gradient(90deg, #2e7d32, #4caf50);
+}
+
+.station-card.partially_ready .readiness-bar {
+  background: linear-gradient(90deg, #ff9800, #ffb74d);
+}
+
+.station-card.not_ready .readiness-bar {
+  background: linear-gradient(90deg, #b30000, #ff4d4d);
+}
+
+.station-card.unknown .readiness-bar {
+  background: linear-gradient(90deg, #6c757d, #9e9e9e);
 }
 
 /* ===== META ===== */

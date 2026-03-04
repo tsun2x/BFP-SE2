@@ -23,6 +23,15 @@ export default function IncidentReport() {
     narrative: ""
   });
 
+  // Station and officer selection states
+  const [stations, setStations] = useState([]);
+  const [recipientStationId, setRecipientStationId] = useState('');
+  const [officers, setOfficers] = useState([]);
+  const [officersLoading, setOfficersLoading] = useState(false);
+  const [officersError, setOfficersError] = useState('');
+  const [recipientOfficerId, setRecipientOfficerId] = useState('');
+  const [sendToAll, setSendToAll] = useState(false);
+
   const [selectedLocation, setSelectedLocation] = useState(null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -42,6 +51,47 @@ export default function IncidentReport() {
   // Use auth context (optional - for tracking which admin created incident)
   const { user } = useAuth();
   const { addNotification } = useNotifications();
+
+  // Load stations on component mount
+  useEffect(() => {
+    async function loadStations() {
+      try {
+        const res = await apiClient.get('/stations');
+        const potential = res?.stations || res?.data || res || [];
+        const list = Array.isArray(potential) ? potential : [];
+        setStations(list);
+      } catch (e) {
+        console.warn('failed to load stations', e && e.message);
+        setStations([]);
+      }
+    }
+    loadStations();
+  }, []);
+
+  // Load officers when station is selected
+  useEffect(() => {
+    async function loadOfficers() {
+      setOfficers([]);
+      setRecipientOfficerId('');
+      setSendToAll(false);
+      setOfficersError('');
+      if (!recipientStationId) return;
+      setOfficersLoading(true);
+      try {
+        const res = await apiClient.get(`/officers?station_id=${recipientStationId}`);
+        const potential = res?.officers || res?.users || res?.data || res?.rows || res || [];
+        const list = Array.isArray(potential) ? potential : [];
+        setOfficers(list);
+      } catch (e) {
+        console.warn('failed to load officers', e && e.message);
+        setOfficers([]);
+        setOfficersError(e && e.message ? String(e.message) : 'Failed to load officers');
+      } finally {
+        setOfficersLoading(false);
+      }
+    }
+    loadOfficers();
+  }, [recipientStationId]);
 
   // Auto-fill form when incoming call is received
   useEffect(() => {
@@ -150,6 +200,20 @@ export default function IncidentReport() {
       return;
     }
 
+    // Validate station selection
+    if (!recipientStationId) {
+      setToastMessage("Please select a station to dispatch to");
+      setToastType("error");
+      return;
+    }
+
+    // Validate officer selection if not sending to all
+    if (!sendToAll && !recipientOfficerId) {
+      setToastMessage("Please select an officer or check 'Send to all officers'");
+      setToastType("error");
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -197,7 +261,11 @@ export default function IncidentReport() {
         alarmLevel: formData.alarmLevel,
         narrative: formData.narrative,
         latitude: selectedLocation.lat,
-        longitude: selectedLocation.lng
+        longitude: selectedLocation.lng,
+        // Add station and officer dispatch information
+        recipientStationId: Number(recipientStationId),
+        recipientOfficerId: recipientOfficerId ? Number(recipientOfficerId) : null,
+        sendToAll: Boolean(sendToAll)
       };
       console.log('[IncidentReport] Submitting payload:', payload);
 
@@ -349,6 +417,66 @@ export default function IncidentReport() {
               <option value="General Alarm">General Alarm</option>
             </select>
           </div>
+
+          <h2 className="section-title">Dispatch To</h2>
+          
+          <div className="form-item">
+            <label>Station</label>
+            <select
+              className="filter-dropdown"
+              value={recipientStationId}
+              onChange={(e) => setRecipientStationId(e.target.value)}
+            >
+              <option value="">Select station</option>
+              {stations.map((s) => (
+                <option key={s.station_id} value={String(s.station_id)}>
+                  {s.station_name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {recipientStationId && (
+            <div className="form-item">
+              <label>Officers</label>
+              {officersLoading ? (
+                <div style={{ color: '#666', fontSize: 13 }}>Loading officers...</div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <select
+                    className="filter-dropdown"
+                    value={recipientOfficerId}
+                    onChange={(e) => setRecipientOfficerId(e.target.value)}
+                    disabled={sendToAll || (Array.isArray(officers) && officers.length === 0)}
+                  >
+                    <option value="">
+                      {Array.isArray(officers) && officers.length > 0 ? 'Select officer (optional)' : 'No officers found'}
+                    </option>
+                    {Array.isArray(officers) && officers.map((o) => (
+                      <option key={o.user_id || o.id} value={String(o.user_id || o.id)}>
+                        {o.full_name || o.name || o.email}
+                      </option>
+                    ))}
+                  </select>
+
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={sendToAll}
+                      onChange={(e) => {
+                        setSendToAll(e.target.checked);
+                        if (e.target.checked) setRecipientOfficerId('');
+                      }}
+                    />
+                    <span style={{ fontSize: 13, color: '#666' }}>Send to all officers</span>
+                  </label>
+                </div>
+              )}
+              {officersError && (
+                <div style={{ color: '#c33', fontSize: 13, marginTop: 4 }}>{officersError}</div>
+              )}
+            </div>
+          )}
 
           <div className="form-item">
             <label>Narrative Report</label>

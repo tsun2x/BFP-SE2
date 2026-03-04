@@ -108,42 +108,128 @@
 
 
 /* -------------------------------------- */
-/* TABLE CARD */
+/* TABLE CONTAINER */
 /* -------------------------------------- */
-.officer-table-card {
-  background: #fff;
-  border-radius: 14px;
-  overflow: hidden;
-  box-shadow: 0px 2px 6px rgba(0,0,0,0.08);
-  border: 2px solid #B22222; /* same theme orange */
+.officer-table-container {
+  width: 100%;
 }
 
+/* -------------------------------------- */
+/* SEARCH CONTENT SEPARATOR */
+/* -------------------------------------- */
+.search-content-separator {
+  margin: 32px 0 24px 0;
+}
 
+.search-content-separator .separator-line {
+  height: 1px;
+  background: linear-gradient(to right, transparent, #d1d5db, transparent);
+}
 
-/* TABLE FORMAT */
-.officer-table-card table {
+/* -------------------------------------- */
+/* STATION SEPARATOR */
+/* -------------------------------------- */
+.station-separator {
+  display: flex;
+  align-items: center;
+  margin: 32px 0 24px 0;
+  gap: 16px;
+}
+
+.separator-line {
+  flex: 1;
+  height: 2px;
+  background: linear-gradient(to right, transparent, #B22222, transparent);
+}
+
+.separator-text {
+  color: #B22222;
+  font-size: 14px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  padding: 0 12px;
+  white-space: nowrap;
+}
+
+/* -------------------------------------- */
+/* STATIONS LIST */
+/* -------------------------------------- */
+.stations-list {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* -------------------------------------- */
+/* STATION CONTAINER */
+/* -------------------------------------- */
+.station-container {
+  background: #fff;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0px 2px 6px rgba(0,0,0,0.08);
+  border: 2px solid #B22222;
+}
+
+/* -------------------------------------- */
+/* STATION HEADER */
+/* -------------------------------------- */
+.station-header {
+  background: #ffffff !important;
+  color: #801010 !important;
+  padding: 16px 20px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  border-radius: 10px;
+}
+
+.station-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: #000000;
+}
+
+/* -------------------------------------- */
+/* STATION TABLE WRAPPER */
+/* -------------------------------------- */
+.station-table-wrapper {
+  overflow-x: auto;
+}
+
+/* -------------------------------------- */
+/* OFFICER TABLE */
+/* -------------------------------------- */
+.officer-table {
   width: 100%;
   border-collapse: collapse;
 }
 
-/* TABLE HEADER */
-.officer-table-card thead th {
-  background: linear-gradient(to right, #B22222, #dd2c2c);
+.officer-table thead th {
+  background: linear-gradient(to right, #991b1b, #dc2626);
   color: white;
-  padding: 14px;
-  font-size: 15px;
+  padding: 12px 14px;
+  font-size: 14px;
   font-weight: 600;
+  border-bottom: 2px solid #B22222;
 }
 
-.officer-table-card td,
-.officer-table-card th {
-  padding: 16px 14px;
+.officer-table td,
+.officer-table th {
+  padding: 14px;
   font-size: 14px;
   border-bottom: 1px solid #f2f2f2;
+  text-align: left;
 }
 
-.officer-table-card tbody tr:last-child td {
+.officer-table tbody tr:last-child td {
   border-bottom: none;
+}
+
+.officer-table tbody tr:hover {
+  background: #f8f9fa;
 }
 
 

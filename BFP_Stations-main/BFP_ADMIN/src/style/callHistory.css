@@ -21,11 +21,11 @@
 /* -------------------------------------- */
 .call-search-row {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   gap: 25px;
   background: #fff;
   padding: 20px 22px;
-  border-radius: 14px;
+  border-radius: 8px;
   margin-bottom: 28px;
   box-shadow: 0 2px 6px rgba(0,0,0,0.08);
 }
@@ -37,15 +37,38 @@
   height: 42px;
   display: flex;
   align-items: center;
+  margin-top: 24px;
 }
 
 .call-search-icon {
   position: absolute;
-  left: 12px;
+  left: 14px;
   top: 50%;
   transform: translateY(-50%);
-  font-size: 16px;
-  color: #ff7a00;
+  width: 18px;
+  height: 18px;
+  color: #B22222;
+  z-index: 1;
+  pointer-events: none;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.call-search-icon svg {
+  width: 100%;
+  height: 100%;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.call-search-wrapper:focus-within .call-search-icon {
+  color: #8b1a1a;
+  transform: translateY(-50%) scale(1.1);
 }
 
 /* SEARCH INPUT WRAPPER */
@@ -82,20 +105,110 @@
   box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.1);
 }
 
+/* FILTER DROPDOWNS */
+.filter-dropdowns {
+  display: flex;
+  gap: 15px;
+  align-items: center;
+}
+
+.filter-select {
+  padding: 10px 14px;
+  border: 2px solid #e1e1e1;
+  border-radius: 8px;
+  background: #fafafa;
+  font-size: 14px;
+  font-weight: 500;
+  color: #333;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  min-width: 160px;
+}
+
+.filter-select:focus {
+  outline: none;
+  border-color: #B22222;
+  box-shadow: 0 0 0 3px rgba(178, 34, 34, 0.15);
+  background: #fff;
+}
+
+.filter-select:hover {
+  border-color: #B22222;
+}
+
+/* OFFICER FILTER GROUP (for date filter) */
+.officer-filters {
+  display: flex;
+  gap: 15px;
+  align-items: flex-end;
+}
+
+.officer-filter-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.officer-filter-group label {
+  font-size: 13px;
+  margin-bottom: 4px;
+  color: #555;
+  font-weight: 500;
+}
+
+.officer-filter-input {
+  width: 160px;
+  height: 42px;
+  padding: 10px;
+  border: 2px solid #e1e1e1;
+  border-radius: 8px;
+  outline: none;
+  background: #fafafa;
+  font-size: 14px;
+  transition: all 0.3s ease;
+  box-sizing: border-box;
+}
+
+.officer-filter-input:focus {
+  outline: none;
+  border-color: #B22222;
+  box-shadow: 0 0 0 3px rgba(178, 34, 34, 0.15);
+  background: #fff;
+}
+
+.officer-filter-input:hover {
+  border-color: #B22222;
+}
+
 /* SEARCH INPUT */
 .call-search-input {
   width: 100%;
   height: 42px;
-  padding-left: 40px;
-  padding-right: 12px;
-  border: 1px solid #ccc;
-  border-radius: 8px;
+  padding-left: 45px;
+  padding-right: 14px;
+  border: 2px solid #e1e1e1;
+  border-radius: 12px;
   font-size: 14px;
   outline: none;
+  background: #fafafa;
+  transition: all 0.3s ease;
+  box-sizing: border-box;
+}
+
+.call-search-input::placeholder {
+  color: #9ca3af;
+  font-weight: 400;
 }
 
 .call-search-input:focus {
   border-color: #B22222;
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(178, 34, 34, 0.1);
+  transform: translateY(-1px);
+}
+
+.call-search-input:hover {
+  border-color: #B22222;
+  background: #fff;
 }
 
 /* FILTERS */
@@ -134,7 +247,7 @@
 /* -------------------------------------- */
 .call-table-card {
   background: #fff;
-  border-radius: 14px;
+  border-radius: 8px;
   overflow: hidden;
   border: 2px solid #B22222;
   box-shadow: 0 2px 6px rgba(0,0,0,0.08);
@@ -318,7 +431,7 @@
   background: white;
   width: 420px;
   padding: 25px;
-  border-radius: 14px;
+  border-radius: 8px;
   box-shadow: 0 3px 10px rgba(0,0,0,0.15);
   animation: fadeIn 0.25s ease;
 }

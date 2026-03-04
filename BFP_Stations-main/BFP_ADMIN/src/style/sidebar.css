@@ -24,17 +24,19 @@
   font-size: 16px;
   font-weight: 700;
   color: #ecf0f1;
-  margin-bottom: 10px;
+  margin-bottom: 16px;
   text-transform: uppercase;
   letter-spacing: 0.8px;
   text-align: center;
+  padding: 0 8px;
+  line-height: 1.3;
 }
 
 /* Divider below station name */
 .station-divider {
   height: 1px;
-  background: #3A3A3A;
-  margin: 8px 0 18px;
+  background: linear-gradient(to right, transparent, #3A3A3A, transparent);
+  margin: 0 0 24px 0;
 }
 
 /* =========================

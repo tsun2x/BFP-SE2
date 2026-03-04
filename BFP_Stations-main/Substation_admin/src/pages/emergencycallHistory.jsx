@@ -40,6 +40,7 @@ export default function EmergencyCallHistory() {
   const [panelOpen, setPanelOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
+  const [dateFilter, setDateFilter] = useState("");
 
   // Open right-side panel
   const openPanel = (call) => {
@@ -79,7 +80,10 @@ export default function EmergencyCallHistory() {
     // Type filter
     const matchesType = typeFilter === "all" || c.type === typeFilter;
     
-    return matchesSearch && matchesStatus && matchesType;
+    // Date filter
+    const matchesDate = !dateFilter || c.datetime.startsWith(dateFilter);
+    
+    return matchesSearch && matchesStatus && matchesType && matchesDate;
   });
 
   // Status Badge UI Mapping
@@ -117,30 +121,46 @@ export default function EmergencyCallHistory() {
         
         {/* FILTER DROPDOWNS */}
         <div className="filter-dropdowns">
-          <select 
-            className="filter-select"
-            value={statusFilter} 
-            onChange={(e) => setStatusFilter(e.target.value)}
-          >
-            <option value="all">All Status</option>
-            <option value="Pending">Pending</option>
-            <option value="Dispatch On the Way">Dispatch On the Way</option>
-            <option value="Resolved">Resolved</option>
-            <option value="Cancelled">Cancelled</option>
-          </select>
+          <div className="officer-filter-group">
+            <label>Status</label>
+            <select 
+              className="officer-filter-input"
+              value={statusFilter} 
+              onChange={(e) => setStatusFilter(e.target.value)}
+            >
+              <option value="all">All Status</option>
+              <option value="Pending">Pending</option>
+              <option value="Dispatch On the Way">Dispatch On the Way</option>
+              <option value="Resolved">Resolved</option>
+              <option value="Cancelled">Cancelled</option>
+            </select>
+          </div>
           
-          <select 
-            className="filter-select"
-            value={typeFilter} 
-            onChange={(e) => setTypeFilter(e.target.value)}
-          >
-            <option value="all">All Types</option>
-            <option value="Electrical Fire">Electrical Fire</option>
-            <option value="Medical Emergency">Medical Emergency</option>
-            <option value="Structural Fire">Structural Fire</option>
-            <option value="Vehicle Accident">Vehicle Accident</option>
-            <option value="Other">Other</option>
-          </select>
+          <div className="officer-filter-group">
+            <label>Type</label>
+            <select 
+              className="officer-filter-input"
+              value={typeFilter} 
+              onChange={(e) => setTypeFilter(e.target.value)}
+            >
+              <option value="all">All Types</option>
+              <option value="Electrical Fire">Electrical Fire</option>
+              <option value="Medical Emergency">Medical Emergency</option>
+              <option value="Structural Fire">Structural Fire</option>
+              <option value="Vehicle Accident">Vehicle Accident</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+          
+          <div className="officer-filter-group">
+            <label>Date</label>
+            <input 
+              type="date" 
+              className="officer-filter-input" 
+              value={dateFilter}
+              onChange={(e) => setDateFilter(e.target.value)}
+            />
+          </div>
         </div>
       </div>
 

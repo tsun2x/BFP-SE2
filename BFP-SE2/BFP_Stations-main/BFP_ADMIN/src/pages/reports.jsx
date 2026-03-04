@@ -1,5 +1,5 @@
 // File: Reports.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import '../style/reports.css';
 import ConfirmModal from '../components/ConfirmModal';
 import apiClient from '../utils/apiClient';
@@ -170,12 +170,386 @@ function ComposeForm({ stations, onSend, onClose }) {
   );
 }
 
-// Placeholder ReplyForm
+// Gmail-style Compose Window Component
+function ComposeWindow({ isOpen, onClose, onSend, stations, replyTo = null }) {
+  const [isMinimized, setIsMinimized] = useState(false);
+  const [position, setPosition] = useState({ x: window.innerWidth - 420, y: window.innerHeight - 300 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [formData, setFormData] = useState({
+    recipient: replyTo?.email || '',
+    subject: replyTo ? `Re: ${replyTo.subject}` : '',
+    body: ''
+  });
+  
+  // Station and officer selection states
+  const [recipientStationId, setRecipientStationId] = useState('');
+  const [officers, setOfficers] = useState([]);
+  const [officersLoading, setOfficersLoading] = useState(false);
+  const [officersError, setOfficersError] = useState('');
+  const [recipientOfficerId, setRecipientOfficerId] = useState('');
+  const [sendToAll, setSendToAll] = useState(false);
+  const [recipientType, setRecipientType] = useState('station'); // 'station' or 'fire-truck'
+  
+  const [attachments, setAttachments] = useState([]);
+  const fileInputRef = useRef(null);
+  
+  const windowRef = useRef(null);
+
+  const handleMouseDown = (e) => {
+    setIsDragging(true);
+    setDragStart({
+      x: e.clientX - position.x,
+      y: e.clientY - position.y
+    });
+  };
+
+  const handleMouseMove = useCallback((e) => {
+    if (isDragging) {
+      setPosition({
+        x: e.clientX - dragStart.x,
+        y: e.clientY - dragStart.y
+      });
+    }
+  }, [isDragging, dragStart]);
+
+  const handleMouseUp = useCallback(() => {
+    setIsDragging(false);
+  }, []);
+
+  useEffect(() => {
+    if (isDragging) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      return () => {
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+      };
+    }
+  }, [isDragging, handleMouseMove, handleMouseUp]);
+
+  // Load officers when station is selected
+  useEffect(() => {
+    async function loadOfficers() {
+      setOfficers([]);
+      setRecipientOfficerId('');
+      setSendToAll(false);
+      setOfficersError('');
+      if (!recipientStationId) return;
+      setOfficersLoading(true);
+      try {
+        const res = await apiClient.get(`/officers?station_id=${recipientStationId}`);
+        const potential = res?.officers || res?.users || res?.data || res?.rows || res || [];
+        const list = Array.isArray(potential) ? potential : [];
+        setOfficers(list);
+      } catch (e) {
+        console.warn('failed to load officers', e && e.message);
+        setOfficers([]);
+        setOfficersError(e && e.message ? String(e.message) : 'Failed to load officers');
+      } finally {
+        setOfficersLoading(false);
+      }
+    }
+    loadOfficers();
+  }, [recipientStationId]);
+
+  const handleFileSelect = (e) => {
+    const files = Array.from(e.target.files);
+    const newAttachments = files.map(file => ({
+      file,
+      name: file.name,
+      size: file.size,
+      type: file.type,
+      id: Date.now() + Math.random()
+    }));
+    setAttachments(prev => [...prev, ...newAttachments]);
+  };
+
+  const removeAttachment = (id) => {
+    setAttachments(prev => prev.filter(att => att.id !== id));
+  };
+
+  const handleSend = () => {
+    if (replyTo) {
+      // Reply mode - can reply to original sender or different officer
+      if (formData.body.trim()) {
+        if (sendToAll && recipientOfficerId) {
+          // Reply to different officer
+          onSend({
+            recipientStationId: recipientStationId || replyTo.station_id,
+            recipientOfficerId,
+            sendToAll: false, // Not sending to all, just specific officer
+            subject: formData.subject,
+            body: formData.body,
+            attachments: attachments,
+            replyTo: replyTo
+          });
+        } else {
+          // Reply to original sender
+          onSend(formData.body);
+        }
+        // Reset form
+        setRecipientStationId('');
+        setRecipientOfficerId('');
+        setSendToAll(false);
+        setFormData({ recipient: '', subject: '', body: '' });
+        setAttachments([]);
+        onClose();
+      }
+    } else {
+      // Compose mode - validate station and recipient
+      if (recipientStationId && (sendToAll || recipientOfficerId) && formData.body.trim()) {
+        onSend({
+          recipientStationId,
+          recipientOfficerId,
+          sendToAll,
+          subject: formData.subject,
+          body: formData.body,
+          attachments: attachments,
+          replyTo: replyTo
+        });
+        // Reset form
+        setRecipientStationId('');
+        setRecipientOfficerId('');
+        setSendToAll(false);
+        setFormData({ recipient: '', subject: '', body: '' });
+        setAttachments([]);
+        onClose();
+      }
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div
+      ref={windowRef}
+      className={`compose-window ${isMinimized ? 'minimized' : ''}`}
+      style={{
+        position: 'fixed',
+        left: `${position.x}px`,
+        top: `${position.y}px`,
+        zIndex: 1000
+      }}
+    >
+      <div
+        className="compose-window-header"
+        onMouseDown={handleMouseDown}
+      >
+        <div className="compose-window-title">
+          {replyTo ? 'Reply to Message' : 'New Message'}
+        </div>
+        <div className="compose-window-controls">
+          <button
+            className="compose-window-control minimize"
+            onClick={() => setIsMinimized(!isMinimized)}
+            title={isMinimized ? 'Maximize' : 'Minimize'}
+          />
+          <button
+            className="compose-window-control close"
+            onClick={onClose}
+            title="Close"
+          />
+        </div>
+      </div>
+      
+      <div className="compose-window-body">
+        <div className="compose-field">
+          <label>To</label>
+          {replyTo ? (
+            <div style={{ 
+              padding: '10px 12px', 
+              border: '1px solid var(--border)', 
+              borderRadius: '6px',
+              background: '#f8fafc',
+              color: '#1e293b',
+              fontSize: '14px'
+            }}>
+              {replyTo.email || replyTo.name || 'Original Sender'}
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <select
+                className="filter-dropdown"
+                value={recipientType}
+                onChange={(e) => {
+                  setRecipientType(e.target.value);
+                  setRecipientStationId('');
+                  setRecipientOfficerId('');
+                  setSendToAll(false);
+                }}
+              >
+                <option value="station">Station</option>
+                <option value="fire-truck">Fire Truck Driver</option>
+              </select>
+              
+              {recipientType === 'station' && (
+                <select
+                  className="filter-dropdown"
+                  value={recipientStationId}
+                  onChange={(e) => setRecipientStationId(e.target.value)}
+                >
+                  <option value="">Select station</option>
+                  {(stations || []).map((s) => (
+                    <option key={s.station_id} value={String(s.station_id)}>
+                      {s.station_name}
+                    </option>
+                  ))}
+                </select>
+              )}
+              
+              {recipientType === 'fire-truck' && (
+                <select
+                  className="filter-dropdown"
+                  value={recipientOfficerId}
+                  onChange={(e) => setRecipientOfficerId(e.target.value)}
+                >
+                  <option value="">Select fire truck driver</option>
+                  <option value="driver-001">John Martinez - Unit 1</option>
+                  <option value="driver-002">Mike Johnson - Unit 2</option>
+                  <option value="driver-003">Sarah Chen - Unit 3</option>
+                </select>
+              )}
+              
+              {recipientType === 'station' && recipientStationId && (
+                <div style={{ marginTop: 8 }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 13 }}>
+                    <input
+                      type="checkbox"
+                      checked={sendToAll}
+                      onChange={(e) => {
+                        setSendToAll(e.target.checked);
+                        if (e.target.checked) setRecipientOfficerId('');
+                      }}
+                    />
+                    <span style={{ color: 'var(--muted)' }}>Send to all officers</span>
+                  </label>
+                  
+                  {!sendToAll && (
+                    <select
+                      className="filter-dropdown"
+                      value={recipientOfficerId}
+                      onChange={(e) => setRecipientOfficerId(e.target.value)}
+                      style={{ marginTop: 4 }}
+                    >
+                      <option value="">Select officer (optional)</option>
+                      {Array.isArray(officers) && officers.map((o) => (
+                        <option key={o.user_id || o.id} value={String(o.user_id || o.id)}>
+                          {o.full_name || o.name || o.email}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="compose-field">
+          <label>Subject</label>
+          <input
+            type="text"
+            value={formData.subject}
+            onChange={(e) => setFormData({...formData, subject: e.target.value})}
+            placeholder="Report subject"
+          />
+        </div>
+        
+        <div className="compose-field">
+          <label>Message</label>
+          <textarea
+            value={formData.body}
+            onChange={(e) => setFormData({...formData, body: e.target.value})}
+            placeholder="Type your message here..."
+          />
+        </div>
+
+        {/* File Attachments */}
+        <div className="compose-field">
+          <label>Attachments</label>
+          <div className="attachment-area">
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              onChange={handleFileSelect}
+              style={{ display: 'none' }}
+              accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
+            />
+            <button 
+              className="attachment-btn"
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <i className="fa-solid fa-paperclip"></i> Attach Files
+            </button>
+            
+            {attachments.length > 0 && (
+              <div className="attachments-list">
+                {attachments.map(att => (
+                  <div key={att.id} className="attachment-item">
+                    <div className="attachment-info">
+                      <i className="fa-solid fa-file"></i>
+                      <span className="attachment-name">{att.name}</span>
+                      <span className="attachment-size">
+                        {att.size < 1024 * 1024 
+                          ? `${(att.size / 1024).toFixed(1)} KB`
+                          : `${(att.size / (1024 * 1024)).toFixed(1)} MB`
+                        }
+                      </span>
+                    </div>
+                    <button 
+                      className="attachment-remove"
+                      onClick={() => removeAttachment(att.id)}
+                      title="Remove attachment"
+                    >
+                      <i className="fa-solid fa-times"></i>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+        
+        <div className="compose-actions">
+          <button className="compose-btn cancel" onClick={onClose}>
+            Cancel
+          </button>
+          <button 
+            className="compose-btn send" 
+            onClick={handleSend}
+            disabled={
+              replyTo 
+                ? !formData.body.trim() || (sendToAll && !recipientOfficerId)  // Reply mode: need message body, and officer if checkbox is checked
+                : !recipientStationId || (!sendToAll && !recipientOfficerId) || !formData.body.trim()  // Compose mode: need station, recipient, and message
+            }
+          >
+            Send
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 function ReplyForm({ to, onSend, onClose }) {
   const [text, setText] = useState('');
   return (
     <div>
-      <div style={{ marginBottom: 10 }}><strong>To:</strong> {to?.email}</div>
+      <div style={{ marginBottom: 10 }}>
+        <strong>To:</strong> {to?.name || to?.email || 'Unknown Sender'}
+        {to?.type === 'fire-truck-report' && (
+          <span style={{ marginLeft: 8, color: '#ef4444', fontSize: 12 }}>
+            🚒 Fire Truck Driver
+          </span>
+        )}
+        <div style={{ marginTop: 4, fontSize: 12, color: '#666' }}>
+          {to?.type === 'fire-truck-report' 
+            ? `Replying to Fire Truck Driver at ${to?.location || 'Unknown location'}`
+            : `Replying to ${to?.name || to?.email || 'Unknown Sender'}`
+          }
+        </div>
+      </div>
       <textarea
         className="reply-textarea"
         value={text}
@@ -194,13 +568,14 @@ export default function Reports() {
   const [reports, setReports] = useState([]);
   const [filteredReports, setFilteredReports] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterType, setFilterType] = useState('recent');
+  const [filterType, setFilterType] = useState('all');
   const [selectedId, setSelectedId] = useState(null);
   const [confirmState, setConfirmState] = useState({ open: false, id: null, type: null });
   const [replyModal, setReplyModal] = useState({ open: false, to: null });
   const [composeModal, setComposeModal] = useState({ open: false });
   const [stations, setStations] = useState([]);
   const [threadMessages, setThreadMessages] = useState([]);
+  const [showMoreDropdown, setShowMoreDropdown] = useState(false);
 
   const selected = reports.find(r => r.id === selectedId) || null;
 
@@ -213,6 +588,7 @@ export default function Reports() {
 
   const loadConversations = async () => {
     try {
+      // Load regular conversations
       const data = await apiClient.get('/conversations');
       const conversations = data?.conversations || [];
       const mapped = conversations.map((c) => {
@@ -222,18 +598,68 @@ export default function Reports() {
           id: c.conversationId,
           conversationId: c.conversationId,
           name: c.otherStationName || c.stationBName || c.stationAName || 'Station',
-          subject: last?.subject || '(No subject)',
+          subject: last?.subject || '(No report)',
           preview,
           date: last?.sent_at || c.updatedAt || null,
           full: last?.body || '',
           email: '',
           read: last ? Boolean(last.is_read) : true,
+          type: 'message', // Regular message type
         };
       });
-      setReports(mapped);
-      setFilteredReports(mapped);
+
+      // Load fire truck driver reports from their app
+      let fireTruckReports = [];
+      try {
+        const fireTruckData = await apiClient.get('/fire-truck-reports');
+        fireTruckReports = (fireTruckData?.reports || []).map((report) => ({
+          id: `fire-truck-${report.id}`,
+          conversationId: report.conversationId || null,
+          name: `Fire Truck Driver - ${report.driverName || 'Unknown'}`,
+          subject: report.subject || report.reportType || 'Fire Truck Report',
+          preview: report.message ? String(report.message).slice(0, 80) : '',
+          date: report.createdAt || report.timestamp || null,
+          full: report.message || '',
+          email: report.driverEmail || '',
+          read: Boolean(report.is_read),
+          type: 'fire-truck-report', // Fire truck driver report type
+          reportType: report.reportType || 'status',
+          location: report.location || '',
+          stationId: report.stationId,
+        }));
+      } catch (fireTruckError) {
+        console.warn('Failed to load fire truck reports:', fireTruckError);
+        
+        // Add example fire truck driver message for demo purposes
+        const now = new Date();
+        fireTruckReports = [{
+          id: 'fire-truck-example-001',
+          conversationId: null,
+          name: 'Fire Truck Driver - John Martinez',
+          subject: 'Need Backup - Structure Fire',
+          preview: '2-story residential building fully involved, need additional engine company and ladder truck...',
+          date: now.toISOString(),
+          full: '2-story residential building fully involved, fire spreading to adjacent structure. Need additional engine company and ladder truck immediately. Multiple families may be trapped. Location: Main Street & Oak Avenue. Coordinates: 14.6092, 120.9842. Requesting mutual aid from neighboring stations.',
+          email: 'john.martinez@firedept.gov',
+          read: false,
+          type: 'fire-truck-report',
+          reportType: 'need-backup',
+          location: 'Main Street & Oak Avenue, District 5',
+          stationId: 1,
+        }];
+      }
+
+      // Merge both types and sort by date (newest first)
+      const allReports = [...mapped, ...fireTruckReports].sort((a, b) => {
+        const dateA = a.date ? new Date(a.date) : new Date(0);
+        const dateB = b.date ? new Date(b.date) : new Date(0);
+        return dateB - dateA;
+      });
+
+      setReports(allReports);
+      setFilteredReports(allReports);
       // Do not auto-select a message on initial load — keep list-only view
-      if (!mapped.find((r) => r.id === selectedId)) {
+      if (!allReports.find((r) => r.id === selectedId)) {
         setSelectedId(null);
       }
     } catch (e) {
@@ -285,6 +711,7 @@ export default function Reports() {
     // Filter type
     if (filterType === 'unread') filtered = filtered.filter(r => !r.read);
     else if (filterType === 'read') filtered = filtered.filter(r => r.read);
+    else if (filterType === 'fire-truck') filtered = filtered.filter(r => r.type === 'fire-truck-report');
     else if (filterType === 'recent') filtered = filtered.sort((a,b)=> new Date(b.date) - new Date(a.date));
     // 'all' shows everything
 
@@ -376,9 +803,6 @@ export default function Reports() {
             <div className="inbox-header-content">
               <h2><i className="fa-solid fa-inbox"></i> Inbox</h2>
               <div className="search-and-filter">
-                <button className="btn btn-primary" onClick={() => setComposeModal({ open: true })}>
-                  <i className="fa-solid fa-pen"></i> New Message
-                </button>
                 <div className="search-container">
                   <input
                     type="text"
@@ -389,12 +813,40 @@ export default function Reports() {
                   />
                   <i className="fa-solid fa-magnifying-glass search-icon"></i>
                 </div>
-                <select className="filter-dropdown" value={filterType} onChange={(e)=>setFilterType(e.target.value)}>
-                  <option value="recent">Recent</option>
-                  <option value="unread">Unread</option>
-                  <option value="read">Read</option>
-                  <option value="all">All</option>
-                </select>
+                <button className="btn btn-primary compose-btn" onClick={() => setComposeModal({ open: true })}>
+                  <i className="fa-solid fa-pen-to-square"></i> Compose
+                </button>
+              </div>
+            </div>
+            <div className="filter-section">
+              <div className="filter-buttons">
+                <button className={`filter-btn ${filterType === 'all' ? 'active' : ''}`} onClick={() => setFilterType('all')}>
+                  <i className="fa-solid fa-inbox"></i> All
+                </button>
+                <button className={`filter-btn ${filterType === 'unread' ? 'active' : ''}`} onClick={() => setFilterType('unread')}>
+                  <i className="fa-solid fa-envelope"></i> Unread
+                </button>
+                <button className={`filter-btn ${filterType === 'fire-truck' ? 'active' : ''}`} onClick={() => setFilterType('fire-truck')}>
+                  <i className="fa-solid fa-truck-fire"></i> Fire Truck
+                </button>
+                <button className={`filter-btn ${filterType === 'spam' ? 'active' : ''}`} onClick={() => setFilterType('spam')}>
+                  <i className="fa-solid fa-shield-halved"></i> Spam
+                </button>
+                <div className="filter-dropdown-wrapper">
+                  <button className="filter-dropdown-btn" onClick={() => setShowMoreDropdown(!showMoreDropdown)}>
+                    <i className="fa-solid fa-ellipsis-vertical"></i>
+                  </button>
+                  {showMoreDropdown && (
+                    <div className="filter-dropdown-menu">
+                      <button onClick={() => { setFilterType('recent'); setShowMoreDropdown(false); }}>
+                        <i className="fa-solid fa-clock"></i> Recent
+                      </button>
+                      <button onClick={() => { setFilterType('read'); setShowMoreDropdown(false); }}>
+                        <i className="fa-solid fa-envelope-open"></i> Read
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -404,7 +856,7 @@ export default function Reports() {
               filteredReports.map(r => (
                 <div
                   key={r.id}
-                  className={`inbox-item ${selectedId === r.id ? 'active' : ''}`}
+                  className={`inbox-item ${selectedId === r.id ? 'active' : ''} ${r.type === 'fire-truck-report' ? 'fire-truck-item' : ''}`}
                   onClick={()=>setSelectedId(r.id)}
                   role="button"
                   tabIndex={0}
@@ -412,7 +864,7 @@ export default function Reports() {
                 >
                   <div className="item-left">
                     <div className="avatar">
-                      <i className="fa-solid fa-file-lines"></i>
+                      <i className={`fa-solid ${r.type === 'fire-truck-report' ? 'fa-truck-fire' : 'fa-file-lines'}`}></i>
                     </div>
                     {!r.read && <div className="unread-indicator"><i className="fa-solid fa-circle"></i></div>}
                   </div>
@@ -437,20 +889,31 @@ export default function Reports() {
               <div className="message-card-header">
                 <h2 className="subject">{selected.subject}</h2>
                 <div className="message-controls">
-                  <button className="small-link" onClick={()=>openConfirm(selected.id,'archive')}><i className="fa-solid fa-archive"></i> Archive</button>
-                  <button className="btn btn-danger" onClick={()=>openConfirm(selected.id,'delete')}><i className="fa-solid fa-trash"></i> Delete</button>
-                  <button className="btn btn-primary" onClick={()=>openReply(selected)}><i className="fa-solid fa-reply"></i> Reply</button>
+                  <button className="gmail-btn archive-btn" onClick={()=>openConfirm(selected.id,'archive')} title="Archive message">
+                    <i className="fa-solid fa-archive"></i>
+                  </button>
+                  <button className="gmail-btn delete-btn" onClick={()=>openConfirm(selected.id,'delete')} title="Delete message">
+                    <i className="fa-solid fa-trash"></i>
+                  </button>
+                  <button className="gmail-btn reply-btn" onClick={()=>openReply(selected)} title="Reply to message">
+                    <i className="fa-solid fa-reply"></i>
+                  </button>
                   <button className="back-button-content" onClick={()=>setSelectedId(null)}><i className="fa-solid fa-arrow-left"></i> Back</button>
                 </div>
               </div>
 
               <div className="message-sender">
                 <div className="sender-avatar">
-                  <i className="fa-solid fa-building"></i>
+                  <i className={`fa-solid ${selected.type === 'fire-truck-report' ? 'fa-truck-fire' : 'fa-building'}`}></i>
                 </div>
                 <div className="sender-meta">
                   <div className="sender-name">{selected.name}</div>
                   <div className="sender-email">{formatDate(selected.date)}</div>
+                  {selected.type === 'fire-truck-report' && selected.location && (
+                    <div className="sender-location">
+                      <i className="fa-solid fa-location-dot"></i> {selected.location}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -486,17 +949,22 @@ export default function Reports() {
         />
       )}
 
-      <Modal open={replyModal.open} title={replyModal.to ? `Reply to ${replyModal.to.name}`:'Reply'} onClose={()=>setReplyModal({open:false,to:null})}>
-        <ReplyForm to={replyModal.to} onSend={sendReply} onClose={()=>setReplyModal({open:false,to:null})} />
-      </Modal>
+      {/* Gmail-style Compose Window */}
+      <ComposeWindow
+        isOpen={composeModal.open}
+        onClose={() => setComposeModal({ open: false })}
+        onSend={sendNewMessage}
+        stations={stations}
+      />
 
-      <Modal open={composeModal.open} title="New Message" onClose={()=>setComposeModal({open:false})}>
-        <ComposeForm
-          stations={stations}
-          onSend={sendNewMessage}
-          onClose={()=>setComposeModal({open:false})}
-        />
-      </Modal>
+      {/* Gmail-style Reply Window */}
+      <ComposeWindow
+        isOpen={replyModal.open}
+        onClose={() => setReplyModal({ open: false, to: null })}
+        onSend={sendReply}
+        stations={stations}
+        replyTo={replyModal.to}
+      />
       
       {/* Empty State */}
       {filteredReports.length === 0 && (

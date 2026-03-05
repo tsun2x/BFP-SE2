@@ -188,7 +188,7 @@ function AppContent() {
 
   // Socket: listen for incidents and join station-specific room
   useEffect(() => {
-    const socket = io('http://localhost:5000');
+    const socket = io(import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:5000');
     socketRef.current = socket;
 
     socket.on('connect', () => {
@@ -320,7 +320,7 @@ function AppContent() {
     const stationId = user?.assignedStationId || user?.assigned_station_id || 'main';
     const token = localStorage.getItem('authToken');
     console.log('[Accept] Sending accept for alarm', callId, 'station', stationId, 'token?', !!token);
-    fetch(`http://localhost:5000/api/incidents/${callId}/accept`, {
+    fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/incidents/${callId}/accept`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ stationId }),

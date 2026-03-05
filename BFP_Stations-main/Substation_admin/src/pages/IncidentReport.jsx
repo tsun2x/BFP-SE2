@@ -7,8 +7,8 @@ import ConfirmModal from "../components/ConfirmModal";
 import MapContainerComponent from "../components/MapContainer";
 import Toast from "../components/Toast";
 import apiClient from "../utils/apiClient";
-import "../style/incidentReport.css";
-import "../style/confirmModal.css";
+import "../style/incidentreport.css";
+import "../style/confirmmodal.css";
 
 export default function IncidentReport() {
   const [formData, setFormData] = useState({

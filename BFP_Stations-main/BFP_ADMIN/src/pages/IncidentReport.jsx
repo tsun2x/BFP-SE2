@@ -8,8 +8,8 @@ import MapContainerComponent from "../components/MapContainer";
 import ConfirmModal from "../components/ConfirmModal";
 import Toast from "../components/Toast";
 import apiClient from "../utils/apiClient";
-import "../style/incidentReport.css";
-import "../style/confirmModal.css";
+import "../style/incidentreport.css";
+import "../style/confirmmodal.css";
 import { getRandomMockIncident } from "../data/mockIncidents";
 
 export default function IncidentReport() {

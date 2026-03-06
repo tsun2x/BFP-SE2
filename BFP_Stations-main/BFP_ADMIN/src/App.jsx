@@ -295,6 +295,23 @@ function AppContent() {
       } catch (e) { console.error('[truck-status-update] handler error:', e); }
     });
 
+    // Station-on-alert: an incident was accepted — all units should be on standby
+    socket.on('station-on-alert', (data) => {
+      try {
+        console.log('[Frontend] station-on-alert received:', data);
+        addNotification({
+          title: '⚠ Station On Alert',
+          message: data.message || `Incident #${data.alarmId} accepted by ${data.acceptedByStationName || 'a station'}. Be on standby.`,
+          type: 'warning',
+        });
+        info(
+          data.message || `⚠ Incident #${data.alarmId} accepted — all units on standby.`,
+          undefined,
+          { sticky: false }
+        );
+      } catch (e) { console.error('[station-on-alert] handler error:', e); }
+    });
+
     socket.on('disconnect', () => console.log('Socket disconnected from server'));
 
     return () => {

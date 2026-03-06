@@ -414,6 +414,15 @@ router.post('/incidents/:alarmId/accept', authenticateToken, async (req, res) =>
         stationName: stationNameAccepted,
       });
       console.log(`[AcceptAPI] Emitted call-accepted to alarm-${alarmId} (station ${stationId})`);
+
+      // Alert ALL other stations to be on standby
+      io.emit('station-on-alert', {
+        alarmId: Number(alarmId),
+        acceptedByStationId: isMainAdmin ? 'main' : Number(stationId),
+        acceptedByStationName: stationNameAccepted,
+        message: `⚠ Incident #${alarmId} has been accepted by ${stationNameAccepted || 'a station'}. All units be on standby.`,
+      });
+      console.log(`[AcceptAPI] Emitted station-on-alert for alarm ${alarmId}`);
     }
 
     res.json({ message: 'Incident accepted', alarm: result.alarm });
@@ -498,10 +507,10 @@ router.get('/incidents', authenticateToken, requireRoles(['admin', 'substation_a
     let query = supabase
       .from('alarms')
       .select(
-        `alarm_id,end_user_id,user_latitude,user_longitude,initial_alarm_level,current_alarm_level,status,assigned_station_id,call_time,dispatch_time,resolve_time,users(full_name,phone_number),fire_stations(station_name),firetrucks(plate_number),alarm_response_log(details)`
+        `alarm_id,end_user_id,user_latitude,user_longitude,initial_alarm_level,current_alarm_level,status,assigned_station_id,assigned_truck_id,call_time,dispatch_time,resolve_time,users!end_user_id(full_name,phone_number),fire_stations!assigned_station_id(station_name),alarm_response_log(details)`
       )
       .order('call_time', { ascending: false })
-      .limit(50);
+      .limit(100);
 
     if (!isAdmin) {
       query = query.eq('assigned_station_id', stationId);
@@ -513,20 +522,20 @@ router.get('/incidents', authenticateToken, requireRoles(['admin', 'substation_a
     const flattened = (alarms || []).map(a => ({
       alarm_id: a.alarm_id,
       end_user_id: a.end_user_id,
-      full_name: a.users?.[0]?.full_name || null,
-      phone_number: a.users?.[0]?.phone_number || null,
+      full_name: a.users?.full_name || a.users?.[0]?.full_name || null,
+      phone_number: a.users?.phone_number || a.users?.[0]?.phone_number || null,
       user_latitude: a.user_latitude,
       user_longitude: a.user_longitude,
       initial_alarm_level: a.initial_alarm_level,
       current_alarm_level: a.current_alarm_level,
       status: a.status,
       assigned_station_id: a.assigned_station_id ?? null,
+      assigned_truck_id: a.assigned_truck_id ?? null,
       call_time: a.call_time,
       dispatch_time: a.dispatch_time,
       resolve_time: a.resolve_time,
-      station_name: a.fire_stations?.[0]?.station_name || null,
-      plate_number: a.firetrucks?.[0]?.plate_number || null,
-      details: a.alarm_response_log?.[0]?.details || null
+      station_name: a.fire_stations?.station_name || a.fire_stations?.[0]?.station_name || null,
+      details: a.alarm_response_log?.[0]?.details || a.alarm_response_log?.details || null
     }));
 
     res.json({ incidents: flattened, total: flattened.length });
@@ -585,7 +594,7 @@ router.get('/incidents/:alarmId', authenticateToken, requireRoles(['admin', 'sub
 
     const { data: alarms, error: alarmErr } = await supabase
       .from('alarms')
-      .select('alarm_id,end_user_id,user_latitude,user_longitude,initial_alarm_level,current_alarm_level,status,assigned_station_id,call_time,dispatch_time,resolve_time,users(full_name,phone_number)')
+      .select('alarm_id,end_user_id,user_latitude,user_longitude,initial_alarm_level,current_alarm_level,status,assigned_station_id,call_time,dispatch_time,resolve_time,users!end_user_id(full_name,phone_number)')
       .eq('alarm_id', alarmId)
       .limit(1);
 
@@ -614,6 +623,153 @@ router.get('/incidents/:alarmId', authenticateToken, requireRoles(['admin', 'sub
   } catch (error) {
     console.error('Get incident details error:', error);
     res.status(500).json({ message: 'Failed to fetch incident details', error: error.message });
+  }
+});
+
+// ── Get full report data for PDF/DOCX generation ─────────────────────
+router.get('/incidents/:alarmId/report-data', authenticateToken, requireRoles(['admin', 'substation_admin']), async (req, res) => {
+  try {
+    const { alarmId } = req.params;
+    const isAdmin = isAdminUser(req.user);
+    const stationId = getUserStationId(req.user);
+
+    // Fetch alarm with caller and station info
+    const { data: alarm, error: alarmErr } = await supabase
+      .from('alarms')
+      .select('alarm_id,end_user_id,user_latitude,user_longitude,initial_alarm_level,current_alarm_level,status,assigned_station_id,assigned_truck_id,call_time,dispatch_time,resolve_time,users!end_user_id(full_name,phone_number,first_name,last_name),fire_stations!assigned_station_id(station_name,address,contact_number)')
+      .eq('alarm_id', alarmId)
+      .single();
+
+    if (alarmErr || !alarm) return res.status(404).json({ message: 'Incident not found' });
+
+    // Fetch response log
+    const { data: logs } = await supabase
+      .from('alarm_response_log')
+      .select('action_type,details,action_timestamp,performed_by_user_id')
+      .eq('alarm_id', alarmId)
+      .order('action_timestamp', { ascending: true });
+
+    // Fetch existing incident_report if already submitted
+    const { data: report } = await supabase
+      .from('incident_reports')
+      .select('*')
+      .eq('alarm_id', alarmId)
+      .maybeSingle();
+
+    // Fetch submitter name if report exists
+    let submitterName = null;
+    if (report?.submitted_by_user_id) {
+      const { data: submitter } = await supabase
+        .from('users')
+        .select('full_name')
+        .eq('user_id', report.submitted_by_user_id)
+        .single();
+      submitterName = submitter?.full_name || null;
+    }
+
+    res.json({
+      alarm: {
+        ...alarm,
+        caller_full_name: alarm.users?.full_name || alarm.users?.[0]?.full_name || null,
+        caller_phone: alarm.users?.phone_number || alarm.users?.[0]?.phone_number || null,
+        station_name: alarm.fire_stations?.station_name || alarm.fire_stations?.[0]?.station_name || null,
+        station_address: alarm.fire_stations?.address || alarm.fire_stations?.[0]?.address || null,
+        station_contact: alarm.fire_stations?.contact_number || alarm.fire_stations?.[0]?.contact_number || null,
+        truck_plate: alarm.assigned_truck_id ? `Truck #${alarm.assigned_truck_id}` : null,
+      },
+      timeline: logs || [],
+      report: report ? { ...report, submitter_name: submitterName } : null,
+    });
+  } catch (error) {
+    console.error('Get report-data error:', error);
+    res.status(500).json({ message: 'Failed to fetch report data', error: error.message });
+  }
+});
+
+// ── Save incident report (submit formal report after resolution) ───────
+router.post('/incidents/:alarmId/submit-report', authenticateToken, requireRoles(['admin', 'substation_admin']), async (req, res) => {
+  try {
+    const { alarmId } = req.params;
+    const { incident_type, narrative, injuries_reported, deaths_reported, property_affected, report_type, location } = req.body;
+    const isAdmin = isAdminUser(req.user);
+    const stationId = getUserStationId(req.user);
+
+    // Fetch alarm to validate ownership
+    const { data: alarm, error: alarmErr } = await supabase
+      .from('alarms')
+      .select('alarm_id,assigned_station_id,status,user_latitude,user_longitude')
+      .eq('alarm_id', alarmId)
+      .single();
+
+    if (alarmErr || !alarm) return res.status(404).json({ message: 'Incident not found' });
+
+    if (!isAdmin && String(alarm.assigned_station_id) !== String(stationId)) {
+      return res.status(403).json({ message: 'Forbidden: this incident is not assigned to your station' });
+    }
+
+    // Upsert into incident_reports (allow re-submit to update)
+    const { data: existing } = await supabase
+      .from('incident_reports')
+      .select('report_id')
+      .eq('alarm_id', alarmId)
+      .maybeSingle();
+
+    let result;
+
+    if (existing) {
+      const locationFallback = location || (alarm.user_latitude && alarm.user_longitude ? `${alarm.user_latitude}, ${alarm.user_longitude}` : 'Unknown Location');
+      const { data, error } = await supabase
+        .from('incident_reports')
+        .update({
+          report_type: report_type || 'Incident Report',
+          incident_type,
+          location: locationFallback,
+          narrative,
+          injuries_reported: injuries_reported ?? 0,
+          deaths_reported: deaths_reported ?? 0,
+          property_affected,
+          submitted_by_user_id: req.user.id,
+          submitted_at: new Date().toISOString(),
+        })
+        .eq('report_id', existing.report_id)
+        .select()
+        .single();
+      if (error) throw error;
+      result = data;
+    } else {
+      const locationFallback = location || (alarm.user_latitude && alarm.user_longitude ? `${alarm.user_latitude}, ${alarm.user_longitude}` : 'Unknown Location');
+      const { data, error } = await supabase
+        .from('incident_reports')
+        .insert([{
+          alarm_id: Number(alarmId),
+          report_type: report_type || 'Incident Report',
+          incident_type,
+          location: locationFallback,
+          narrative,
+          injuries_reported: injuries_reported ?? 0,
+          deaths_reported: deaths_reported ?? 0,
+          property_affected,
+          submitted_by_user_id: req.user.id,
+          submitted_at: new Date().toISOString(),
+        }])
+        .select()
+        .single();
+      if (error) throw error;
+      result = data;
+    }
+
+    // Log in alarm_response_log
+    await supabase.from('alarm_response_log').insert([{
+      alarm_id: Number(alarmId),
+      action_type: 'Report Submitted',
+      details: `Formal incident report submitted by ${req.user.id}`,
+      performed_by_user_id: req.user.id,
+    }]);
+
+    res.status(201).json({ message: 'Report submitted successfully', report: result });
+  } catch (error) {
+    console.error('Submit report error:', error);
+    res.status(500).json({ message: 'Failed to submit report', error: error.message });
   }
 });
 

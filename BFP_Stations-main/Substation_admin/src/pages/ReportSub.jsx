@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import '../style/ReportSub.css';
 import ConfirmModal from '../components/ConfirmModal';
 import apiClient from '../utils/apiClient';
+import IncidentReportModal from '../components/IncidentReportModal';
 
 // Placeholder Modal
 function Modal({ open, title, children, onClose }) {
@@ -157,8 +158,24 @@ function ComposeWindow({ isOpen, onClose, onSend, stations, replyTo = null }) {
   
   const [attachments, setAttachments] = useState([]);
   const fileInputRef = useRef(null);
+  const [incidents, setIncidents] = useState([]);
+  const [incidentsLoading, setIncidentsLoading] = useState(false);
+  const [attachedAlarmId, setAttachedAlarmId] = useState('');
   
   const windowRef = useRef(null);
+
+  // Load resolved incidents for the "Attach Incident Report" selector
+  useEffect(() => {
+    if (!isOpen || replyTo) return;
+    setIncidentsLoading(true);
+    apiClient.get('/incidents')
+      .then((data) => {
+        const list = data?.incidents || data?.alarms || (Array.isArray(data) ? data : []);
+        setIncidents(list);
+      })
+      .catch(() => setIncidents([]))
+      .finally(() => setIncidentsLoading(false));
+  }, [isOpen, replyTo]);
 
   const handleMouseDown = (e) => {
     setIsDragging(true);
@@ -258,12 +275,15 @@ function ComposeWindow({ isOpen, onClose, onSend, stations, replyTo = null }) {
       }
     } else {
       if (recipientStationId && (sendToAll || recipientOfficerId) && formData.body.trim()) {
+        const finalBody = attachedAlarmId
+          ? `${formData.body}\n\n[INCIDENT_REPORT:${attachedAlarmId}]`
+          : formData.body;
         onSend({
           recipientStationId,
           recipientOfficerId,
           sendToAll,
           subject: formData.subject,
-          body: formData.body,
+          body: finalBody,
           attachments: attachments,
           replyTo: replyTo
         });
@@ -272,6 +292,7 @@ function ComposeWindow({ isOpen, onClose, onSend, stations, replyTo = null }) {
         setSendToAll(false);
         setFormData({ recipient: '', subject: '', body: '' });
         setAttachments([]);
+        setAttachedAlarmId('');
         onClose();
       }
     }
@@ -423,6 +444,45 @@ function ComposeWindow({ isOpen, onClose, onSend, stations, replyTo = null }) {
           />
         </div>
         
+        {/* Attach Incident Report */}
+        {!replyTo && (
+          <div className="compose-field">
+            <label>Attach Incident Report</label>
+            <select
+              className="filter-dropdown"
+              value={attachedAlarmId}
+              onChange={(e) => {
+                const alarmId = e.target.value;
+                setAttachedAlarmId(alarmId);
+                if (alarmId) {
+                  const inc = incidents.find(i => String(i.alarm_id) === alarmId);
+                  if (inc && !formData.subject) {
+                    setFormData(prev => ({
+                      ...prev,
+                      subject: `Incident Report - ${inc.incident_type || 'Fire Incident'} at ${inc.location || inc.users?.full_name || 'Unknown Location'}`
+                    }));
+                  }
+                }
+              }}
+            >
+              <option value="">None (no report attached)</option>
+              {incidentsLoading
+                ? <option disabled>Loading incidents...</option>
+                : incidents.map(inc => (
+                    <option key={inc.alarm_id} value={String(inc.alarm_id)}>
+                      #{inc.alarm_id} — {inc.incident_type || 'Incident'} — {inc.location || inc.users?.full_name || ''}
+                    </option>
+                  ))
+              }
+            </select>
+            {attachedAlarmId && (
+              <div style={{ marginTop: 4, fontSize: 12, color: '#2563eb' }}>
+                📎 Incident Report #{attachedAlarmId} will be attached
+              </div>
+            )}
+          </div>
+        )}
+
         {/* File Attachments */}
         <div className="compose-field">
           <label>Attachments</label>
@@ -535,6 +595,7 @@ export default function ReportSub() {
   const [stations, setStations] = useState([]);
   const [threadMessages, setThreadMessages] = useState([]);
   const [showMoreDropdown, setShowMoreDropdown] = useState(false);
+  const [downloadReportAlarmId, setDownloadReportAlarmId] = useState(null);
 
   const selected = reports.find(r => r.id === selectedId) || null;
 
@@ -543,6 +604,14 @@ export default function ReportSub() {
     const d = new Date(isoOrDateString);
     if (Number.isNaN(d.getTime())) return String(isoOrDateString);
     return d.toLocaleString();
+  };
+
+  const extractReportAlarmId = (bodies) => {
+    for (const b of (Array.isArray(bodies) ? bodies : [bodies])) {
+      const match = String(b || '').match(/\[INCIDENT_REPORT:(\d+)\]/);
+      if (match) return match[1];
+    }
+    return null;
   };
 
   const loadConversations = async () => {
@@ -832,19 +901,62 @@ export default function ReportSub() {
               </div>
 
               <div className="message-content">
-                {(threadMessages && threadMessages.length > 0
-                  ? threadMessages
-                  : [{ message_id: 'fallback', body: selected.full, sent_at: selected.date }]
-                ).map((m) => (
-                  <p key={m.message_id}>
-                    {String(m.body || '').split('\n').map((para, idx) => (
-                      <span key={idx}>
-                        {para}
-                        <br />
-                      </span>
-                    ))}
-                  </p>
-                ))}
+                {(() => {
+                  const messages = threadMessages && threadMessages.length > 0
+                    ? threadMessages
+                    : [{ message_id: 'fallback', body: selected.full, sent_at: selected.date }];
+                  const attachedAlarmId = extractReportAlarmId(messages.map(m => m.body));
+                  return (
+                    <>
+                      {messages.map((m) => (
+                        <p key={m.message_id}>
+                          {String(m.body || '').replace(/\[INCIDENT_REPORT:\d+\]/g, '').trim().split('\n').map((para, idx) => (
+                            <span key={idx}>
+                              {para}
+                              <br />
+                            </span>
+                          ))}
+                        </p>
+                      ))}
+                      {attachedAlarmId && (
+                        <div style={{
+                          marginTop: 16,
+                          padding: '12px 16px',
+                          background: '#eff6ff',
+                          border: '1px solid #bfdbfe',
+                          borderRadius: 8,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 12
+                        }}>
+                          <span style={{ fontSize: 24 }}>📎</span>
+                          <div>
+                            <div style={{ fontWeight: 600, color: '#1d4ed8', fontSize: 14 }}>
+                              Incident Report attached
+                            </div>
+                            <div style={{ fontSize: 12, color: '#64748b' }}>Alarm ID: #{attachedAlarmId}</div>
+                          </div>
+                          <button
+                            onClick={() => setDownloadReportAlarmId(attachedAlarmId)}
+                            style={{
+                              marginLeft: 'auto',
+                              padding: '8px 16px',
+                              background: '#c81e1e',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: 6,
+                              cursor: 'pointer',
+                              fontSize: 13,
+                              fontWeight: 600
+                            }}
+                          >
+                            📄 View & Download Report
+                          </button>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
 
                           </div>
@@ -876,7 +988,15 @@ export default function ReportSub() {
         stations={stations}
         replyTo={replyModal.to}
       />
-      
+
+      {/* Incident Report Download Modal */}
+      {downloadReportAlarmId && (
+        <IncidentReportModal
+          alarmId={downloadReportAlarmId}
+          onClose={() => setDownloadReportAlarmId(null)}
+        />
+      )}
+
       {filteredReports.length === 0 && (
         <div className="empty-state-icon">
           <i className="fa-solid fa-inbox"></i>

@@ -36,7 +36,7 @@ router.get('/contacts', authenticateToken, requireAdmin, async (req, res) => {
 // POST /api/contacts (admin)
 router.post('/contacts', authenticateToken, requireAdmin, async (req, res) => {
   try {
-    const { category, station, hotline, location, published, sort_order } = req.body || {};
+    const { category, station, hotline, location, sort_order } = req.body || {};
     if (!station || !hotline) {
       return res.status(400).json({ success: false, message: 'Station and hotline are required' });
     }
@@ -46,7 +46,6 @@ router.post('/contacts', authenticateToken, requireAdmin, async (req, res) => {
       station: String(station).trim(),
       hotline: String(hotline).trim(),
       location: location || '',
-      published: published !== false,
       sort_order: sort_order ?? 0,
       created_at: now,
       updated_at: now,
@@ -68,13 +67,12 @@ router.put('/contacts/:id', authenticateToken, requireAdmin, async (req, res) =>
   try {
     const id = req.params.id;
     if (!id) return res.status(400).json({ success: false, message: 'Missing id' });
-    const { category, station, hotline, location, published, sort_order } = req.body || {};
+    const { category, station, hotline, location, sort_order } = req.body || {};
     const payload = {
       category: category || 'BFP',
       station: String(station || '').trim(),
       hotline: String(hotline || '').trim(),
       location: location || '',
-      published: published !== false,
       sort_order: sort_order ?? 0,
       updated_at: new Date().toISOString(),
     };
@@ -107,7 +105,7 @@ router.delete('/contacts/:id', authenticateToken, requireAdmin, async (req, res)
   }
 });
 
-// ── Public (read-only, published only) ────────────────────────────────
+// ── Public (read-only) ───────────────────────────────────────────────
 
 // GET /api/public/contacts
 router.get('/public/contacts', async (_req, res) => {
@@ -115,7 +113,6 @@ router.get('/public/contacts', async (_req, res) => {
     const { data, error } = await supabase
       .from('emergency_contacts')
       .select('id, category, station, hotline, location')
-      .eq('published', true)
       .order('sort_order', { ascending: true });
 
     if (error) {

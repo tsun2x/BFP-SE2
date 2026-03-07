@@ -443,12 +443,13 @@ CREATE UNIQUE INDEX firetruck_status_truck_id_idx ON public.firetruck_status (tr
 ```sql
 CREATE TABLE public.emergency_contacts (
   id bigint generated always as identity primary key,
-  name text not null,
-  phone_number text not null,
-  category text default 'general',
-  is_active boolean default true,
+  category text default 'BFP',
+  station text not null,
+  hotline text not null,
+  location text default '',
   sort_order integer default 0,
-  created_at timestamp with time zone default now()
+  created_at timestamp with time zone default now(),
+  updated_at timestamp with time zone default now()
 );
 ```
 

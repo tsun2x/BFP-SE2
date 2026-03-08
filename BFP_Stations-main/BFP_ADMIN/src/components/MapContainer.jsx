@@ -98,72 +98,67 @@ export default function MapContainerComponent({ selectedLocation, onLocationSele
       <div className="map-header">
         <h3>📍 Incident Location</h3>
         {locationName && <p className="location-display">Selected: {locationName}</p>}
-        {selectedLocation && (
-          (() => {
-            const latNum = Number(selectedLocation.lat);
-            const lngNum = Number(selectedLocation.lng);
-            if (Number.isFinite(latNum) && Number.isFinite(lngNum)) {
-              return (
-                <p className="location-coords">
-                  {latNum.toFixed(4)}°, {lngNum.toFixed(4)}°
-                </p>
-              );
-            }
-            return null;
-          })()
-        )}
+        {selectedLocation && (() => {
+          const latNum = Number(selectedLocation.lat);
+          const lngNum = Number(selectedLocation.lng);
+          if (Number.isFinite(latNum) && Number.isFinite(lngNum)) {
+            return (
+              <p className="location-coords">
+                {latNum.toFixed(4)}°, {lngNum.toFixed(4)}°
+              </p>
+            );
+          }
+          return null;
+        })()}
       </div>
-     
-        <div className="map-container-wrapper">
-            <MapContainer
-                center={markerPosition}
-                zoom={15}
-                className="map-view"
-            >
-                <TileLayer
-                url="https://api.maptiler.com/maps/streets/{z}/{x}/{y}.png?key=qPx9g6hwaJAB3La6VCyl"
-                />
-                {markerPosition && (
-                <Marker position={markerPosition}>
-                    <Popup>
-                    <div>
-                        <strong>Incident Location</strong>
-                        <p>{locationName || "Selected location"}</p>
-                    </div>
-                    </Popup>
-                </Marker>
-                )}
-
-                {/* Firetruck markers from Supabase firetruck_location_history */}
-                {firetruckLocations.map((truck) => {
-                  const lat = Number(truck.latitude);
-                  const lng = Number(truck.longitude);
-                  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-                  return (
-                    <Marker
-                      key={`truck-${truck.truck_id}`}
-                      position={[lat, lng]}
-                      icon={firetruckIcon}
-                    >
-                      <Popup>
-                        <div>
-                          <strong>Firetruck #{truck.truck_id}</strong>
-                          {truck.recorded_at && (
-                            <p>Last update: {new Date(truck.recorded_at).toLocaleString()}</p>
-                          )}
-                        </div>
-                      </Popup>
-                    </Marker>
-                  );
-                })}
-                <MapClickHandler onLocationSelect={handleLocationClick} />
-                <MapZoomHandler selectedLocation={selectedLocation} />
-            </MapContainer>
-
-            <div className="map-info">
-                <small>💡 Click on the map to select the incident location</small>
-            </div>
-        </div> 
+      <div className="map-container-wrapper">
+        <MapContainer
+          center={markerPosition}
+          zoom={15}
+          className="map-view"
+        >
+          <TileLayer
+            url="https://api.maptiler.com/maps/openstreetmap/{z}/{x}/{y}.jpg?key=J2Xl68lxzncOI2shzeBc"
+          />
+          {markerPosition && (
+            <Marker position={markerPosition}>
+              <Popup>
+                <div>
+                  <strong>Incident Location</strong>
+                  <p>{locationName || "Selected location"}</p>
+                </div>
+              </Popup>
+            </Marker>
+          )}
+          {/* Firetruck markers from Supabase firetruck_location_history */}
+          {firetruckLocations.map((truck) => {
+            const lat = Number(truck.latitude);
+            const lng = Number(truck.longitude);
+            if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+            return (
+              <Marker
+                key={`truck-${truck.truck_id}`}
+                position={[lat, lng]}
+                icon={firetruckIcon}
+              >
+                <Popup>
+                  <div>
+                    <strong>Firetruck #{truck.truck_id}</strong>
+                    {truck.recorded_at && (
+                      <p>Last update: {new Date(truck.recorded_at).toLocaleString()}</p>
+                    )}
+                  </div>
+                </Popup>
+              </Marker>
+            );
+          })}
+          <MapClickHandler onLocationSelect={handleLocationClick} />
+          <MapZoomHandler selectedLocation={selectedLocation} />
+        </MapContainer>
+        <div className="map-info">
+          <small>💡 Click on the map to select the incident location</small>
+        </div>
+      </div>
     </div>
   );
 }

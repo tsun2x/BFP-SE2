@@ -1,5 +1,15 @@
+import express from 'express';
+import jwt from 'jsonwebtoken';
+import bcrypt from 'bcrypt';
+import { randomUUID } from 'crypto';
+import { supabase } from '../supabaseClient.js';
+import { authenticateToken } from '../middleware/auth.js';
+
+const router = express.Router();
+
+const JWT_SECRET = process.env.JWT_SECRET || 'your_jwt_secret_key';
+
 // POST /api/verify-password
-import bcrypt from 'bcryptjs';
 router.post('/verify-password', authenticateToken, async (req, res) => {
   const { password } = req.body;
   if (!password) return res.status(400).json({ success: false, message: 'Password required' });
@@ -20,16 +30,6 @@ router.post('/verify-password', authenticateToken, async (req, res) => {
 
   return res.json({ success: true });
 });
-import express from 'express';
-import bcrypt from 'bcrypt';
-import jwt from 'jsonwebtoken';
-import { randomUUID } from 'crypto';
-import { supabase } from '../supabaseClient.js';
-import { authenticateToken } from '../middleware/auth.js';
-
-const router = express.Router();
-
-const JWT_SECRET = process.env.JWT_SECRET || 'your_jwt_secret_key';
 
 // Login endpoint
 router.post('/login', async (req, res) => {
@@ -323,22 +323,24 @@ router.put('/me', authenticateToken, async (req, res) => {
       return res.status(400).json({ message: 'Invalid token payload (missing user id)' });
     }
 
-    const { firstName, lastName, rank, phoneNumber, email } = req.body || {};
+    const { firstName, middleName, lastName, rank, phoneNumber, email } = req.body || {};
 
     const updates = {};
     if (typeof firstName === 'string') updates.first_name = firstName.trim();
+    if (typeof middleName === 'string') updates.middle_name = middleName.trim();
     if (typeof lastName === 'string') updates.last_name = lastName.trim();
     if (typeof rank === 'string') updates.rank = rank.trim();
     if (typeof phoneNumber === 'string') updates.phone_number = phoneNumber.trim();
     if (typeof email === 'string') updates.email = email.trim();
 
-    if (updates.first_name || updates.last_name) {
+    if (updates.first_name || updates.middle_name || updates.last_name) {
       const fn = updates.first_name ?? null;
+      const mn = updates.middle_name ?? null;
       const ln = updates.last_name ?? null;
       if (fn !== null || ln !== null) {
         const { data: existingUser, error: existingError } = await supabase
           .from('users')
-          .select('first_name, last_name')
+          .select('first_name, middle_name, last_name')
           .eq('user_id', userId)
           .single();
 
@@ -348,8 +350,9 @@ router.put('/me', authenticateToken, async (req, res) => {
         }
 
         const nextFirst = (updates.first_name ?? existingUser?.first_name ?? '').trim();
+        const nextMiddle = (updates.middle_name ?? existingUser?.middle_name ?? '').trim();
         const nextLast = (updates.last_name ?? existingUser?.last_name ?? '').trim();
-        updates.full_name = `${nextFirst} ${nextLast}`.trim();
+        updates.full_name = `${nextFirst}${nextMiddle ? ' ' + nextMiddle : ''} ${nextLast}`.trim();
       }
     }
 
@@ -1119,8 +1122,51 @@ router.get('/officers', authenticateToken, async (req, res) => {
 // Frontend should call GET /api/me with Authorization: Bearer <token>
 router.get('/me', authenticateToken, async (req, res) => {
   try {
-    // `authenticateToken` middleware attaches the decoded token data to req.user
-    res.json({ user: req.user });
+    // Fetch full user info from database using id from JWT
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(400).json({ message: 'Invalid token payload (missing user id)' });
+    }
+
+    // Fetch user from DB
+    const { data: user, error: userError } = await supabase
+      .from('users')
+      .select('*')
+      .eq('user_id', userId)
+      .single();
+    if (userError || !user) {
+      return res.status(404).json({ message: 'User not found', error: userError?.message });
+    }
+
+    // Fetch station info if assigned
+    let stationInfo = null;
+    if (user.assigned_station_id) {
+      const { data: stations } = await supabase
+        .from('fire_stations')
+        .select('*')
+        .eq('station_id', user.assigned_station_id)
+        .single();
+      stationInfo = stations || null;
+    }
+
+    // Compose user object (match login response)
+    const userObj = {
+      id: user.user_id,
+      idNumber: user.id_number,
+      name: `${user.first_name}${user.middle_name ? ' ' + user.middle_name : ''} ${user.last_name}`.trim(),
+      firstName: user.first_name,
+      middleName: user.middle_name || '',
+      lastName: user.last_name,
+      rank: user.rank,
+      substation: user.substation,
+      assignedStationId: user.assigned_station_id,
+      stationInfo: stationInfo,
+      role: user.role,
+      assigned: !!user.assigned_station_id,
+      email: user.email,
+      phone: user.phone_number
+    };
+    res.json({ user: userObj });
   } catch (error) {
     console.error('Error in /me route:', error);
     res.status(500).json({ message: 'Failed to verify token', error: error.message });

@@ -4,42 +4,46 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { API_URL } from '../../config';
+import { supabase } from '../../utils/supabaseClient';
 
 export const VerifyOtpScreen = ({ route, navigation }) => {
-  const { userId, phone } = route.params || {};
+  const { phone, email } = route.params || {};
   const [code, setCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleVerify = async () => {
     if (!code.trim()) {
-      setError('Please enter the code sent to your phone.');
+      setError('Please enter the code sent to your phone or email.');
       return;
     }
-
     try {
       setLoading(true);
       setError(null);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-
-      const response = await fetch(`${API_URL}/api/enduser/verify-otp`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          user_id: userId,
-          code: code.trim(),
-        }),
-      });
-
-      const json = await response.json();
-
-      if (!response.ok || !json.success) {
-        setError(json.error || 'Invalid or expired code. Please try again.');
+      let error;
+      if (phone) {
+        // Use Supabase verifyOtp for phone
+        ({ error } = await supabase.auth.verifyOtp({
+          phone,
+          token: code.trim(),
+          type: 'sms',
+        }));
+      } else if (email) {
+        // Use Supabase verifyOtp for email
+        ({ error } = await supabase.auth.verifyOtp({
+          email,
+          token: code.trim(),
+          type: 'email',
+        }));
+      } else {
+        setError('No phone or email provided.');
         return;
       }
-
+      if (error) {
+        setError(error.message || 'Invalid or expired code. Please try again.');
+        return;
+      }
       // OTP verified – proceed to main app
       navigation.replace('MainTabs');
     } catch (e) {
@@ -62,9 +66,9 @@ export const VerifyOtpScreen = ({ route, navigation }) => {
             style={{ flex: 1 }}
           >
             <View style={styles.container}>
-              <Text style={styles.title}>Verify your phone</Text>
+              <Text style={styles.title}>Verify your {phone ? 'phone' : 'email'}</Text>
               <Text style={styles.subtitle}>
-                We sent a 6-digit code to {phone || 'your phone number'}
+                We sent a 6-digit code to {phone || email || 'your contact'}
               </Text>
 
               <View style={styles.inputGroup}>

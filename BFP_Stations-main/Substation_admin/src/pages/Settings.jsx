@@ -71,15 +71,11 @@ export default function Settings() {
   // Load user data on mount
   useEffect(() => {
     if (user) {
-      const fullName = user.full_name || user.fullName || user.name || "";
-      const nameParts = typeof fullName === "string" ? fullName.trim().split(/\s+/).filter(Boolean) : [];
-      const derivedFirstName = nameParts.length ? nameParts[0] : "";
-      const derivedLastName = nameParts.length > 1 ? nameParts.slice(1).join(" ") : "";
-
       setProfile((prev) => ({
         ...prev,
-        firstName: user.first_name || user.firstName || derivedFirstName || prev.firstName,
-        lastName: user.last_name || user.lastName || derivedLastName || prev.lastName,
+        firstName: user.first_name || user.firstName || prev.firstName,
+        middleName: user.middle_name || user.middleName || prev.middleName || "",
+        lastName: user.last_name || user.lastName || prev.lastName,
         email: user.email || prev.email,
         phone: user.phone_number || user.phone || prev.phone,
         station: user.station_name || user.stationInfo?.station_name || user.substation || user.station || prev.station,
@@ -96,6 +92,7 @@ export default function Settings() {
         setProfile((prev) => ({
           ...prev,
           firstName: cached.first_name || cached.firstName || prev.firstName,
+          middleName: cached.middle_name || cached.middleName || prev.middleName || "",
           lastName: cached.last_name || cached.lastName || prev.lastName,
           email: cached.email || prev.email,
           phone: cached.phone_number || cached.phone || prev.phone,
@@ -115,6 +112,7 @@ export default function Settings() {
         setProfile((prev) => ({
           ...prev,
           firstName: me.first_name || me.firstName || prev.firstName,
+          middleName: me.middle_name || me.middleName || prev.middleName || "",
           lastName: me.last_name || me.lastName || prev.lastName,
           email: me.email || prev.email,
           phone: me.phone_number || me.phone || prev.phone,
@@ -261,6 +259,7 @@ export default function Settings() {
     try {
       const payload = {
         first_name: profile.firstName,
+        middle_name: profile.middleName,
         last_name: profile.lastName,
         email: profile.email,
         phone: profile.phone,
@@ -355,6 +354,14 @@ export default function Settings() {
                       type="text"
                       value={profile.firstName}
                       onChange={(e) => handleProfileChange("firstName", e.target.value)}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Middle Name</label>
+                    <input
+                      type="text"
+                      value={profile.middleName}
+                      onChange={(e) => handleProfileChange("middleName", e.target.value)}
                     />
                   </div>
                   <div className="form-group">

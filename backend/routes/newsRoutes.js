@@ -131,7 +131,6 @@ router.post('/news', authenticateToken, requireAdmin, async (req, res) => {
       author,
     } = req.body || {};
 
-
     if (!String(title || '').trim()) {
       return res.status(400).json({ success: false, message: 'Title is required' });
     }

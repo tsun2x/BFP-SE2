@@ -74,7 +74,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         headers: {
           'Content-Type': 'application/json',
           'ngrok-skip-browser-warning': 'true',
-          'bypass-tunnel-reminder': '1',
         },
         body: JSON.stringify({ idNumber, password }),
       });
@@ -126,7 +125,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         headers: {
           'Content-Type': 'application/json',
           'ngrok-skip-browser-warning': 'true',
-          'bypass-tunnel-reminder': '1',
         },
         body: JSON.stringify({
           firstName: regData.firstName,
@@ -164,7 +162,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             'Content-Type': 'application/json',
             Authorization: 'Bearer ' + token,
             'ngrok-skip-browser-warning': 'true',
-            'bypass-tunnel-reminder': '1',
           },
         });
       } catch (e) {

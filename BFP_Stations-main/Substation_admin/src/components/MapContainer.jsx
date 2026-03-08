@@ -120,7 +120,7 @@ export default function MapContainerComponent({ selectedLocation, onLocationSele
                 className="map-view"
             >
                 <TileLayer
-                url="https://api.maptiler.com/maps/streets/{z}/{x}/{y}.png?key=qPx9g6hwaJAB3La6VCyl"
+                url="https://api.maptiler.com/maps/openstreetmap/{z}/{x}/{y}.jpg?key=J2Xl68lxzncOI2shzeBc"
                 />
                 {markerPosition && (
                 <Marker position={markerPosition}>

@@ -17,7 +17,7 @@
         "BLUETOOTH",
         "BLUETOOTH_CONNECT"
       ],
-  "usesCleartextTraffic": true
+      "usesCleartextTraffic": true
     },
     "name": "mobile-civilian-expo-clean",
     "slug": "mobile-civilian-expo-clean",
@@ -46,7 +46,21 @@
     "plugins": [
       "./plugins/withTwilioVoice",
       "@react-native-firebase/app",
-      "@react-native-firebase/messaging"
+      "@react-native-firebase/messaging",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "gradleProperties": {
+              "systemProp.http.connectionTimeout": "300000",
+              "systemProp.http.readTimeout": "300000",
+              "systemProp.https.connectionTimeout": "300000",
+              "systemProp.https.readTimeout": "300000"
+            }
+          }
+        }
+      ],
+      "expo-font"
     ]
   }
 }

@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Device } from '@twilio/voice-sdk';
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+// VITE_API_URL already points to the backend /api base (see .env.example)
+const API_BASE = (import.meta.env.VITE_API_URL || 'http://localhost:5000/api').replace(/\/$/, '');
 
 /**
  * useTwilioVoice — React hook that manages a Twilio Voice Device.
@@ -23,7 +24,6 @@ export default function useTwilioVoice(identity, authToken, options = {}) {
   const fetchToken = useCallback(async () => {
     if (!identity || !authToken) return null;
     try {
-      // NOTE: VITE_API_URL already points to /api, so we call /twilio/token here
       const res = await fetch(`${API_BASE}/twilio/token`, {
         method: 'POST',
         headers: {

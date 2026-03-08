@@ -18,7 +18,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { API_URL } from '../../config';
 
 // MapTiler Configuration
-const MAPTILER_API_KEY = 'qPx9g6hwaJAB3La6VCyl';
+const MAPTILER_API_KEY = 'J2Xl68lxzncOI2shzeBc'; // Updated MapTiler API key
 
 export const MapScreen = () => {
   const [firetrucks, setFiretrucks] = useState([]);

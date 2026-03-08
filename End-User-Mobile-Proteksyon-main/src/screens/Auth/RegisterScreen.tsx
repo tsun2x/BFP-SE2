@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { API_URL } from '../../config';
+import { supabase } from '../../utils/supabaseClient';
 
 export const RegisterScreen = ({ navigation }) => {
   console.log('API_URL in JS', API_URL);
@@ -29,79 +30,96 @@ export const RegisterScreen = ({ navigation }) => {
     password: '',
     confirmPassword: '',
   });
+  const [registerMode, setRegisterMode] = useState<'phone' | 'email'>('phone');
 
   const handleChange = (key: string, val: string) => {
     setForm({ ...form, [key]: val });
   };
 
   const handleSignUp = async () => {
-    console.log('handleSignUp pressed', form);
-    alert('SIGN UP pressed');
-
     // Basic client-side validation
-    if (!form.lastName || !form.firstName || !form.phone || !form.gmail || !form.password || !form.confirmPassword) {
+    if (!form.lastName || !form.firstName || !form.password || !form.confirmPassword) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       alert('Please fill in all required fields.');
       return;
     }
-
     if (form.password !== form.confirmPassword) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       alert('Passwords do not match.');
       return;
     }
-
-    try {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-
-      console.log('Calling URL', `${API_URL}/api/enduser/register`);
-
-      const response = await fetch(`${API_URL}/api/enduser/register`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          last_name: form.lastName,
-          first_name: form.firstName,
-          middle_name: form.middleName,
-          phone: form.phone,
-          email: form.gmail,
-          address: form.address,
-          password: form.password,
-        }),
-      });
-
-      const rawText = await response.text();
-      console.log('Raw response text from enduser/register:', rawText);
-
-      let json;
+    if (registerMode === 'phone') {
+      if (!form.phone) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        alert('Please enter your phone number.');
+        return;
+      }
+      // Format phone to +63 if needed
+      let phone = form.phone.trim();
+      if (phone.startsWith('09')) {
+        phone = '+63' + phone.slice(1);
+      } else if (phone.startsWith('63')) {
+        phone = '+' + phone;
+      } else if (!phone.startsWith('+63')) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        alert('Phone number must start with 09 or +63.');
+        return;
+      }
       try {
-        json = JSON.parse(rawText);
-      } catch (parseError) {
-        console.log('Failed to parse JSON from enduser/register:', parseError);
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        const { error } = await supabase.auth.signInWithOtp({
+          phone,
+          options: {
+            data: {
+              last_name: form.lastName,
+              first_name: form.firstName,
+              middle_name: form.middleName,
+              email: form.gmail,
+              address: form.address,
+            },
+          },
+        });
+        if (error) {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+          alert(error.message || 'Failed to send OTP.');
+          return;
+        }
+        navigation.navigate('VerifyOtp', { phone });
+      } catch (e) {
+        console.error('Error during registration:', e);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-        alert('Server response is not valid JSON. Please check server error logs.');
+        alert('Network or server error.');
+      }
+    } else if (registerMode === 'email') {
+      if (!form.gmail) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        alert('Please enter your email.');
         return;
       }
-
-      console.log('register_start response', json);
-
-      if (!response.ok || !json.success) {
+      try {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        const { error } = await supabase.auth.signInWithOtp({
+          email: form.gmail.trim(),
+          options: {
+            data: {
+              last_name: form.lastName,
+              first_name: form.firstName,
+              middle_name: form.middleName,
+              address: form.address,
+            },
+          },
+        });
+        if (error) {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+          alert(error.message || 'Failed to send OTP.');
+          return;
+        }
+        navigation.navigate('VerifyOtp', { email: form.gmail.trim() });
+      } catch (e) {
+        console.error('Error during registration:', e);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-        alert(json.error || 'Registration failed.');
-        return;
+        alert('Network or server error.');
       }
-
-      // Navigate to OTP verification screen
-      navigation.navigate('VerifyOtp', {
-        userId: json.user_id,
-        phone: form.phone,
-      });
-    } catch (e) {
-      console.error('Error during registration:', e);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      alert('Network or server error.');
     }
   };
 
@@ -130,6 +148,16 @@ export const RegisterScreen = ({ navigation }) => {
                   <View style={styles.circle1} />
                   <View style={styles.circle2} />
                   <View style={styles.circle3} />
+                </View>
+
+                {/* Register Mode Toggle */}
+                <View style={{ flexDirection: 'row', justifyContent: 'center', marginBottom: 16 }}>
+                  <TouchableOpacity onPress={() => setRegisterMode('phone')} style={{ marginRight: 16 }}>
+                    <Text style={{ color: registerMode === 'phone' ? '#A30025' : '#666', fontWeight: 'bold' }}>Phone</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => setRegisterMode('email')}>
+                    <Text style={{ color: registerMode === 'email' ? '#A30025' : '#666', fontWeight: 'bold' }}>Email</Text>
+                  </TouchableOpacity>
                 </View>
 
                 {/* WHITE CARD */}
@@ -182,21 +210,39 @@ export const RegisterScreen = ({ navigation }) => {
                       </View>
                     </View>
 
-                    {/* Phone Number */}
-                    <View style={styles.inputGroup}>
-                      <Text style={styles.label}>Phone Number</Text>
-                      <View style={styles.inputContainer}>
-                        <Ionicons name="call-outline" size={20} color="#666" />
-                        <TextInput
-                          style={styles.input}
-                          placeholder="09123456789"
-                          placeholderTextColor="#999"
-                          keyboardType="phone-pad"
-                          value={form.phone}
-                          onChangeText={(t) => handleChange('phone', t)}
-                        />
+                    {/* Phone or Email Input */}
+                    {registerMode === 'phone' ? (
+                      <View style={styles.inputGroup}>
+                        <Text style={styles.label}>Phone Number</Text>
+                        <View style={styles.inputContainer}>
+                          <Ionicons name="call-outline" size={20} color="#666" />
+                          <TextInput
+                            style={styles.input}
+                            placeholder="09123456789"
+                            placeholderTextColor="#999"
+                            keyboardType="phone-pad"
+                            value={form.phone}
+                            onChangeText={(t) => handleChange('phone', t)}
+                          />
+                        </View>
                       </View>
-                    </View>
+                    ) : (
+                      <View style={styles.inputGroup}>
+                        <Text style={styles.label}>Email</Text>
+                        <View style={styles.inputContainer}>
+                          <Ionicons name="mail-outline" size={20} color="#666" />
+                          <TextInput
+                            style={styles.input}
+                            placeholder="email@gmail.com"
+                            placeholderTextColor="#999"
+                            keyboardType="email-address"
+                            autoCapitalize="none"
+                            value={form.gmail}
+                            onChangeText={(t) => handleChange('gmail', t)}
+                          />
+                        </View>
+                      </View>
+                    )}
 
                     {/* Gmail */}
                     <View style={styles.inputGroup}>

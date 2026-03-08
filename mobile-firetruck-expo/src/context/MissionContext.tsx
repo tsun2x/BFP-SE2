@@ -107,14 +107,15 @@ export const MissionProvider = ({ children }: { children: ReactNode }) => {
     }
 
     // Persist via REST API
+    const url = `${API_URL}/api/firetrucks/status`;
+    console.log('[Truck] PUT →', url, '| token?', !!token);
     try {
-      await fetch(`${API_URL}/api/firetrucks/status`, {
+      const resp = await fetch(url, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
           'ngrok-skip-browser-warning': 'true',
-          'bypass-tunnel-reminder': '1',
         },
         body: JSON.stringify({
           truck_id: truckId,
@@ -126,8 +127,9 @@ export const MissionProvider = ({ children }: { children: ReactNode }) => {
           longitude: lng,
         }),
       });
-    } catch (e) {
-      console.error('[Truck] REST status update failed:', e);
+      console.log('[Truck] REST response:', resp.status, resp.statusText);
+    } catch (e: any) {
+      console.error('[Truck] REST status update failed:', e?.message || e);
     }
   }, [truckId, activeAlarmId, token, user?.name]);
 

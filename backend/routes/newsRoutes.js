@@ -78,7 +78,7 @@ router.get('/public/news', async (_req, res) => {
   try {
     const { data, error } = await supabase
       .from('news_room')
-      .select('id, title, description, headline_image, additional_images, author, published_at, date, slug, metadata')
+      .select('id, title, description, heading_image, additional_images, author, published_at, date, slug, metadata')
       .eq('published', true)
       .order('published_at', { ascending: false });
 
@@ -102,7 +102,7 @@ router.get('/public/news/:id', async (req, res) => {
 
     const { data, error } = await supabase
       .from('news_room')
-      .select('id, title, description, headline_image, additional_images, author, published_at, date, slug, metadata')
+      .select('id, title, description, heading_image, additional_images, author, published_at, date, slug, metadata')
       .eq('published', true)
       .eq('id', id)
       .single();
@@ -125,21 +125,23 @@ router.post('/news', authenticateToken, requireAdmin, async (req, res) => {
     const {
       title,
       description,
-      headline_image,
+      heading_image,
       additional_images,
       published,
       author,
     } = req.body || {};
 
+
     if (!String(title || '').trim()) {
       return res.status(400).json({ success: false, message: 'Title is required' });
     }
 
+
     const now = new Date().toISOString();
 
-    let headlineUrl = headline_image || null;
-    if (isDataUrl(headlineUrl)) {
-      headlineUrl = await uploadDataUrlToStorage(headlineUrl, 'headline');
+    let headingUrl = heading_image || null;
+    if (isDataUrl(headingUrl)) {
+      headingUrl = await uploadDataUrlToStorage(headingUrl, 'headline');
     }
 
     let additionalUrls = Array.isArray(additional_images) ? additional_images : [];
@@ -163,7 +165,7 @@ router.post('/news', authenticateToken, requireAdmin, async (req, res) => {
       title: String(title).trim(),
       description: description || '',
       user_id: req.user?.id || null,
-      headline_image: headlineUrl,
+      heading_image: headingUrl,
       additional_images: additionalUrls,
       published: Boolean(published),
       published_at: published ? now : null,
@@ -201,7 +203,7 @@ router.put('/news/:id', authenticateToken, requireAdmin, async (req, res) => {
     const {
       title,
       description,
-      headline_image,
+      heading_image,
       additional_images,
       published,
       author,
@@ -213,9 +215,9 @@ router.put('/news/:id', authenticateToken, requireAdmin, async (req, res) => {
 
     const now = new Date().toISOString();
 
-    let headlineUrl = headline_image || null;
-    if (isDataUrl(headlineUrl)) {
-      headlineUrl = await uploadDataUrlToStorage(headlineUrl, 'headline');
+    let headingUrl = heading_image || null;
+    if (isDataUrl(headingUrl)) {
+      headingUrl = await uploadDataUrlToStorage(headingUrl, 'heading');
     }
 
     let additionalUrls = Array.isArray(additional_images) ? additional_images : [];
@@ -238,7 +240,7 @@ router.put('/news/:id', authenticateToken, requireAdmin, async (req, res) => {
     const payload = {
       title: String(title).trim(),
       description: description || '',
-      headline_image: headlineUrl,
+      heading_image: headingUrl,
       additional_images: additionalUrls,
       published: Boolean(published),
       published_at: published ? now : null,

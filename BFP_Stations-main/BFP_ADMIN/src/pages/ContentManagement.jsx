@@ -41,18 +41,18 @@ function ContentManagement() {
     setOpenSections((prev) => ({ ...prev, [section]: !prev[section] }))
   }
 
-  const handleHeadlineImageUpload = (e) => {
+  const handleheading_imageUpload = (e) => {
     const file = e.target.files?.[0]
     if (!file) return
     const reader = new FileReader()
     reader.onloadend = () => {
-      setNewsForm((prev) => ({ ...prev, headlineImage: reader.result }))
+      setNewsForm((prev) => ({ ...prev, heading_image: reader.result }))
     }
     reader.readAsDataURL(file)
   }
 
-  const removeHeadlineImage = () => {
-    setNewsForm((prev) => ({ ...prev, headlineImage: null }))
+  const removeheading_image = () => {
+    setNewsForm((prev) => ({ ...prev, heading_image: null }))
   }
 
   const handleAdditionalImagesUpload = (e) => {
@@ -130,7 +130,7 @@ function ContentManagement() {
           const payload = {
             title: newsForm.title,
             description: newsForm.description,
-            headline_image: newsForm.headlineImage || null,
+            heading_image: newsForm.heading_image || null,
             additional_images: newsForm.additionalImages || [],
             published: isPublish,
             author: newsForm.author || ''
@@ -179,7 +179,7 @@ function ContentManagement() {
   const [editingNewsId, setEditingNewsId] = useState(null)
   // News form state
   const [newsForm, setNewsForm] = useState({
-    headlineImage: null,
+    heading_image: null,
     title: '',
     description: '',
     author: '',
@@ -189,7 +189,7 @@ function ContentManagement() {
   const resetNewsForm = () => {
     setEditingNewsId(null)
     setNewsForm({
-      headlineImage: null,
+      heading_image: null,
       title: '',
       description: '',
       author: '',
@@ -205,7 +205,7 @@ function ContentManagement() {
   const openEditNews = (newsItem) => {
     setEditingNewsId(newsItem?.id ?? null)
     setNewsForm({
-      headlineImage: newsItem?.headline_image || null,
+      heading_image: newsItem?.heading_image || null,
       title: newsItem?.title || '',
       description: newsItem?.description || '',
       author: Array.isArray(newsItem?.author) ? newsItem.author.join(', ') : (newsItem?.author || ''),
@@ -249,7 +249,7 @@ function ContentManagement() {
   const [confirmModal, setConfirmModal] = useState({ open: false, type: '', title: '', message: '', onConfirm: null, onCancel: null })
   
   // Emergency contact code modal state
-  const [ecCodeModal, setEcCodeModal] = useState({ open: false, action: '', contactId: null, code: '' })
+  const [ecCodeModal, setEcCodeModal] = useState({ open: false, action: '', contactId: null, password: '' })
   
   // News content view modal state
   const [newsContentModal, setNewsContentModal] = useState({ open: false, newsItem: null })
@@ -287,27 +287,34 @@ function ContentManagement() {
 
   // Emergency contact code modal functions
   const showEcCodeModal = (action, contactId) => {
-    setEcCodeModal({ open: true, action, contactId, code: '' })
+    setEcCodeModal({ open: true, action, contactId, password: '' })
   }
 
   const closeEcCodeModal = () => {
-    setEcCodeModal({ open: false, action: '', contactId: null, code: '' })
+    setEcCodeModal({ open: false, action: '', contactId: null, password: '' })
   }
 
   const handleEcCodeSubmit = (e) => {
-    e.preventDefault()
-    // For demo purposes, accept any 4-digit code
-    if (ecCodeModal.code.length === 4) {
-      if (ecCodeModal.action === 'edit') {
-        const contact = contacts.find(c => c.id === ecCodeModal.contactId)
-        setEcModalOpen(true) // Open the edit modal after code confirmation
-      } else if (ecCodeModal.action === 'delete') {
-        performDeleteContact(ecCodeModal.contactId)
-      }
-      closeEcCodeModal()
-    } else {
-      showNotification('error', 'Please enter a valid 4-digit code')
+    e.preventDefault();
+    if (!ecCodeModal.password) {
+      showNotification('error', 'Please enter your password');
+      return;
     }
+    setIsLoading(true);
+    apiClient.post('/verify-password', { password: ecCodeModal.password })
+      .then(() => {
+        if (ecCodeModal.action === 'edit') {
+          const contact = contacts.find(c => c.id === ecCodeModal.contactId);
+          setEcModalOpen(true);
+        } else if (ecCodeModal.action === 'delete') {
+          performDeleteContact(ecCodeModal.contactId);
+        }
+        closeEcCodeModal();
+      })
+      .catch(() => {
+        showNotification('error', 'Incorrect password');
+      })
+      .finally(() => setIsLoading(false));
   }
 
   // Category modal state
@@ -766,7 +773,7 @@ function ContentManagement() {
               {getFilteredNewsItems().map((n) => (
                 <div key={n.id} className="nr-card" onClick={() => showNewsContent(n)}>
                   <button className="nr-card-edit" title="Edit" onClick={(e) => { e.stopPropagation(); openEditNews(n); }} />
-                  <div className="nr-card-media" style={n.headline_image ? { backgroundImage: `url(${n.headline_image})`, backgroundSize: 'cover', backgroundPosition: 'center' } : { backgroundColor: '#e0e0e0' }} />
+                  <div className="nr-card-media" style={n.heading_image ? { backgroundImage: `url(${n.heading_image})`, backgroundSize: 'cover', backgroundPosition: 'center' } : { backgroundColor: '#e0e0e0' }} />
                   <div style={{ marginTop: '6px' }}>
                     <span
                       style={{
@@ -893,7 +900,7 @@ function ContentManagement() {
         )}
 
         {confirmModal.open && (
-          <div className="confirm-modal-backdrop" onClick={() => setConfirmModal((prev) => ({ ...prev, open: false }))}>
+          <div className="confirm-modal-backdrop">
             <div className="confirm-modal" onClick={(e) => e.stopPropagation()}>
               <div className="confirm-modal-icon">
                 <span className={`confirm-icon confirm-icon--${confirmModal.type}`}>
@@ -930,25 +937,24 @@ function ContentManagement() {
 
     {/* Emergency Contact Code Modal */}
     {ecCodeModal.open && (
-      <div className="confirm-modal-backdrop" onClick={closeEcCodeModal}>
+      <div className="confirm-modal-backdrop">
         <div className="confirm-modal" onClick={(e) => e.stopPropagation()}>
           <div className="confirm-modal-icon">
             <span className="confirm-icon confirm-icon--save"><i className="fa-solid fa-lock"></i></span>
           </div>
           <h3 className="confirm-modal-title">
-            {ecCodeModal.action === 'edit' ? 'Edit Contact' : 'Delete Contact'} - Code Required
+            {ecCodeModal.action === 'edit' ? 'Edit Contact' : 'Delete Contact'} - Password Required
           </h3>
           <p className="confirm-modal-message">
-            Please enter a 4-digit code to {ecCodeModal.action === 'edit' ? 'edit' : 'delete'} this emergency contact.
+            Please enter your password to {ecCodeModal.action === 'edit' ? 'edit' : 'delete'} this emergency contact.
           </p>
           <form onSubmit={handleEcCodeSubmit}>
             <div style={{ marginBottom: '20px' }}>
               <input
-                type="text"
-                maxLength="4"
-                placeholder="Enter 4-digit code"
-                value={ecCodeModal.code}
-                onChange={(e) => setEcCodeModal({ ...ecCodeModal, code: e.target.value })}
+                type="password"
+                placeholder="Enter your password"
+                value={ecCodeModal.password}
+                onChange={(e) => setEcCodeModal({ ...ecCodeModal, password: e.target.value })}
                 style={{
                   width: '100%',
                   padding: '12px',
@@ -956,7 +962,6 @@ function ContentManagement() {
                   borderRadius: '8px',
                   fontSize: '16px',
                   textAlign: 'center',
-                  letterSpacing: '4px'
                 }}
               />
             </div>
@@ -1016,12 +1021,12 @@ function ContentManagement() {
                   id="headline-upload" 
                   type="file" 
                   accept="image/*" 
-                  onChange={handleHeadlineImageUpload}
+                  onChange={handleheading_imageUpload}
                 />
-                {newsForm.headlineImage && (
+                {newsForm.heading_image && (
                   <div className="image-preview">
-                    <img src={newsForm.headlineImage} alt="Headline preview" />
-                    <button type="button" className="remove-image-btn" onClick={(e) => { e.stopPropagation(); removeHeadlineImage(); }}>
+                    <img src={newsForm.heading_image} alt="Headline preview" />
+                    <button type="button" className="remove-image-btn" onClick={(e) => { e.stopPropagation(); removeheading_image(); }}>
                       <i className="fa-solid fa-times"></i>
                     </button>
                   </div>
@@ -1090,8 +1095,8 @@ function ContentManagement() {
                 <>
                   <div className="news-content-header">
                     <div className="news-content-image" style={
-                      newsContentModal.newsItem.headline_image
-                        ? { backgroundImage: `url(${newsContentModal.newsItem.headline_image})`, backgroundSize: 'cover', backgroundPosition: 'center', height: '300px' }
+                      newsContentModal.newsItem.heading_image
+                        ? { backgroundImage: `url(${newsContentModal.newsItem.heading_image})`, backgroundSize: 'cover', backgroundPosition: 'center', height: '300px' }
                         : { backgroundColor: '#e0e0e0', height: '300px' }
                     } />
                   
@@ -1290,8 +1295,8 @@ function ContentManagement() {
 function CMModal({ open, title, children, onClose }) {
   if (!open) return null
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
+    <div className="modal-backdrop">
+      <div className="modal">
         <div className="modal-header" style={{ position: 'relative' }}>
           <h3 style={{ margin: 0, width: '100%', textAlign: 'center' }}>{title}</h3>
           <button className="modal-close" onClick={onClose}>×</button>

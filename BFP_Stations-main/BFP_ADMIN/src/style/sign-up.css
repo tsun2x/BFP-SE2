@@ -241,6 +241,32 @@
   margin-top: 5px;
 }
 
+/* ===== OTP Button ===== */
+.otp-btn {
+  padding: 10px 20px;
+  border-radius: 8px;
+  border: 1px solid #b11217;
+  background: linear-gradient(135deg, #8b0000, #c1121f);
+  color: white;
+  font-weight: 500;
+  font-size: 13px;
+  cursor: pointer;
+  transition: 0.25s ease;
+  white-space: nowrap;
+  height: fit-content;
+  align-self: flex-end;
+}
+
+.otp-btn:hover {
+  opacity: 0.9;
+}
+
+.otp-btn:disabled {
+  background: #bbb;
+  border-color: #bbb;
+  cursor: not-allowed;
+}
+
 /* ===== Responsive ===== */
 @media (max-width: 900px) {
   .signup-sidebar {

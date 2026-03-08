@@ -114,6 +114,7 @@ export const MissionProvider = ({ children }: { children: ReactNode }) => {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
           'ngrok-skip-browser-warning': 'true',
+          'bypass-tunnel-reminder': '1',
         },
         body: JSON.stringify({
           truck_id: truckId,

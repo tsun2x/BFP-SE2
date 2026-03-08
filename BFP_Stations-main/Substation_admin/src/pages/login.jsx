@@ -105,7 +105,13 @@ export default function Login() {
         }
         navigate("/");
       } else {
-        setLoginError(result.error || "Login failed. Please try again.");
+        const errMsg = result.error || "Login failed. Please try again.";
+        setLoginError(errMsg);
+        if (errMsg.toLowerCase().includes('id number') || errMsg.toLowerCase().includes('badge')) {
+          setErrors(prev => ({ ...prev, idNumber: errMsg }));
+        } else if (errMsg.toLowerCase().includes('password')) {
+          setErrors(prev => ({ ...prev, password: errMsg }));
+        }
       }
     } catch (error) {
       setLoginError("An error occurred. Please try again.");
@@ -184,9 +190,7 @@ export default function Login() {
                 placeholder="Enter your ID (e.g., BFP-01234)" 
                 className={errors.idNumber ? "error" : ""}
               />
-              {errors.idNumber && (
-                <span className="error-message">{errors.idNumber}</span>
-              )}
+             
             </div>
 
             <div className="auth-group">
@@ -199,9 +203,7 @@ export default function Login() {
                 placeholder="Enter password" 
                 className={errors.password ? "error" : ""}
               />
-              {errors.password && (
-                <span className="error-message">{errors.password}</span>
-              )}
+              
             </div>
 
             <button className="login-btn" type="submit" disabled={isLoading}>

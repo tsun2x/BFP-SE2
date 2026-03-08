@@ -11,6 +11,8 @@ export default function Signup() {
     firstName: "",
     lastName: "",
     idNumber: "",
+    middleName: "",
+    email: "",
     rank: "",
     userType: "Main",
     assignedStationId: "",
@@ -22,6 +24,13 @@ export default function Signup() {
   const [isLoading, setIsLoading] = useState(false);
   const [signupError, setSignupError] = useState("");
   const [passwordStrength, setPasswordStrength] = useState(0);
+
+  // OTP state
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpCode, setOtpCode] = useState("");
+  const [emailVerified, setEmailVerified] = useState(false);
+  const [otpLoading, setOtpLoading] = useState(false);
+  const [otpMessage, setOtpMessage] = useState("");
 
   const checkPasswordStrength = (password) => {
     let strength = 0;
@@ -76,6 +85,13 @@ export default function Signup() {
     if (!formData.assignedStationId) {
       newErrors.assignedStationId = 'Please select assigned station';
     }
+
+    // Require email verification
+    if (!formData.email.trim()) {
+      newErrors.email = "Email is required";
+    } else if (!emailVerified) {
+      newErrors.email = "Please verify your email with OTP";
+    }
     
     return newErrors;
   };
@@ -97,6 +113,58 @@ export default function Signup() {
     // Check password strength
     if (name === "password") {
       setPasswordStrength(checkPasswordStrength(value));
+    }
+
+    // Reset OTP state if email changes after OTP was sent
+    if (name === "email") {
+      setOtpSent(false);
+      setEmailVerified(false);
+      setOtpCode("");
+      setOtpMessage("");
+    }
+  };
+
+  const handleSendOtp = async () => {
+    if (!formData.email.trim()) {
+      setErrors(prev => ({ ...prev, email: "Email is required" }));
+      return;
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(formData.email)) {
+      setErrors(prev => ({ ...prev, email: "Invalid email format" }));
+      return;
+    }
+
+    setOtpLoading(true);
+    setOtpMessage("");
+    try {
+      await apiClient.post('/send-email-otp', { email: formData.email });
+      setOtpSent(true);
+      setOtpMessage("OTP sent! Check your email inbox.");
+    } catch (err) {
+      const msg = err.message || "Failed to send OTP";
+      setOtpMessage(msg.includes('<') ? "Failed to send OTP. Please try again." : msg);
+    } finally {
+      setOtpLoading(false);
+    }
+  };
+
+  const handleVerifyOtp = async () => {
+    if (!otpCode.trim()) {
+      setOtpMessage("Please enter the OTP code");
+      return;
+    }
+    setOtpLoading(true);
+    setOtpMessage("");
+    try {
+      await apiClient.post('/verify-email-otp', { email: formData.email, otp: otpCode });
+      setEmailVerified(true);
+      setOtpMessage("Email verified successfully!");
+    } catch (err) {
+      const msg = err.message || "Invalid or expired OTP";
+      setOtpMessage(msg.includes('<') ? "Verification failed. Please try again." : msg);
+    } finally {
+      setOtpLoading(false);
     }
   };
 
@@ -140,11 +208,13 @@ export default function Signup() {
     try {
       const payload = {
         firstName: formData.firstName,
+        middleName: formData.middleName,
         lastName: formData.lastName,
         idNumber: formData.idNumber,
         rank: formData.rank,
         assignedStationId: formData.assignedStationId,
         password: formData.password,
+        email: formData.email,
         role: 'admin'
       };
 
@@ -225,6 +295,22 @@ export default function Signup() {
               </div>
 
               <div className="auth-group">
+                <label>Middle Name</label>
+                <input 
+                  type="text"
+                  name="middleName"
+                  value={formData.middleName}
+                  onChange={handleInputChange}
+                  required 
+                  placeholder="Enter middle name" 
+                  className={errors.middleName ? "error" : ""}
+                />
+                {errors.middleName && (
+                  <span className="error-message">{errors.middleName}</span>
+                )}
+              </div>
+
+              <div className="auth-group">
                 <label>Last Name</label>
                 <input 
                   type="text"
@@ -242,6 +328,62 @@ export default function Signup() {
             </div>
             
             <div className="auth-row">
+{/* Email with OTP verification */}
+              <div className="auth-group">
+                <label>Email {emailVerified && <span style={{ color: '#28a745' }}>✓ Verified</span>}</label>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <input 
+                    type="email"
+                    name="email"
+                    value={formData.email}
+                    onChange={handleInputChange}
+                    required 
+                    placeholder="Enter email" 
+                    className={errors.email ? "error" : ""}
+                    disabled={emailVerified}
+                    style={{ flex: 1 }}
+                  />
+                  {!emailVerified && (
+                    <button 
+                      type="button" 
+                      onClick={handleSendOtp} 
+                      disabled={otpLoading || !formData.email}
+                      className="otp-btn"
+                    >
+                      {otpLoading ? "Sending..." : otpSent ? "Resend OTP" : "Send OTP"}
+                    </button>
+                  )}
+                </div>
+                {errors.email && (
+                  <span className="error-message">{errors.email}</span>
+                )}
+                {otpSent && !emailVerified && (
+                  <div style={{ marginTop: '8px', display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    <input
+                      type="text"
+                      value={otpCode}
+                      onChange={(e) => setOtpCode(e.target.value)}
+                      placeholder="Enter 6-digit OTP"
+                      maxLength={6}
+                      style={{ flex: 1 }}
+                    />
+                    <button 
+                      type="button" 
+                      onClick={handleVerifyOtp} 
+                      disabled={otpLoading || !otpCode}
+                      className="otp-btn"
+                    >
+                      {otpLoading ? "Verifying..." : "Verify"}
+                    </button>
+                  </div>
+                )}
+                {otpMessage && (
+                  <span className={emailVerified ? "otp-success" : "otp-error"} style={{ fontSize: '13px', marginTop: '6px', display: 'block', color: emailVerified ? '#28a745' : '#dc3545' }}>
+                    {otpMessage}
+                  </span>
+                )}
+              </div>
+
               <div className="auth-group">
                 <label>ID Number</label>
                 <input 
@@ -331,6 +473,8 @@ export default function Signup() {
                   firstName: "",
                   lastName: "",
                   idNumber: "",
+                  middleName: "",
+                  email: "",
                   rank: "",
                   userType: "Main",
                   assignedStationId: "",
@@ -339,6 +483,10 @@ export default function Signup() {
                 });
                 setErrors({});
                 setSignupError("");
+                setOtpSent(false);
+                setOtpCode("");
+                setEmailVerified(false);
+                setOtpMessage("");
               }}>
                 Reset All
               </button>

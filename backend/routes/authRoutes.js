@@ -1,3 +1,25 @@
+// POST /api/verify-password
+import bcrypt from 'bcryptjs';
+router.post('/verify-password', authenticateToken, async (req, res) => {
+  const { password } = req.body;
+  if (!password) return res.status(400).json({ success: false, message: 'Password required' });
+
+  // Fetch user by ID from token
+  const { id } = req.user;
+  const { data: user, error } = await supabase
+    .from('users')
+    .select('password') // adjust if your password field is named differently
+    .eq('user_id', id)
+    .single();
+
+  if (error || !user) return res.status(401).json({ success: false, message: 'User not found' });
+
+  // Use bcrypt to compare
+  const match = await bcrypt.compare(password, user.password);
+  if (!match) return res.status(401).json({ success: false, message: 'Incorrect password' });
+
+  return res.json({ success: true });
+});
 import express from 'express';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
@@ -47,30 +69,23 @@ router.post('/login', async (req, res) => {
 
     if (!user) {
       console.log('[POST /login] No user found for idNumber/phone:', idNumber);
-      return res.status(401).json({ message: 'Invalid ID Number or password' });
+      return res.status(401).json({ message: 'No account found with this ID Number. Please check your BFP badge number.' });
     }
     console.log('[POST /login] Found user id:', user.user_id, 'role:', user.role, 'assigned_station_id:', user.assigned_station_id);
-    console.log('[POST /login] Stored password hash:', user.password ? user.password.substring(0, 20) + '...' : 'NULL');
-    console.log('[POST /login] Provided password:', password);
 
     // Compare password
     let passwordMatch = false;
     try {
       passwordMatch = await bcrypt.compare(password, user.password);
-      console.log('[POST /login] bcrypt.compare result:', passwordMatch);
     } catch (err) {
       console.error('[POST /login] bcrypt error:', err.message);
-      // Try plain text comparison as fallback for testing
       if (password === user.password) {
-        console.log('[POST /login] Plain text match succeeded');
         passwordMatch = true;
       }
     }
 
-    console.log('[POST /login] Final password match:', !!passwordMatch);
-
     if (!passwordMatch) {
-      return res.status(401).json({ message: 'Invalid ID Number or password' });
+      return res.status(401).json({ message: 'Incorrect password. Please try again.' });
     }
 
     // Insert officer login history after successful login
@@ -165,29 +180,27 @@ router.post('/substation-login', async (req, res) => {
 
     if (!rows) {
       console.log('[POST /substation-login] No user found for idNumber:', idNumber);
-      return res.status(401).json({ message: 'Invalid ID Number or password' });
+      return res.status(401).json({ message: 'No account found with this ID Number. Please check your BFP badge number.' });
     }
 
     const user = rows;
 
     if (String(user.role || '').toLowerCase() === 'admin') {
-      return res.status(403).json({ message: 'Admin accounts cannot login to the Substation app' });
+      return res.status(403).json({ message: 'Admin accounts cannot login to the Substation app. Please use the Main Admin portal.' });
     }
 
     let passwordMatch = false;
     try {
       passwordMatch = await bcrypt.compare(password, user.password);
-      console.log('[POST /substation-login] bcrypt.compare result:', passwordMatch);
     } catch (err) {
       console.error('[POST /substation-login] bcrypt error:', err.message);
       if (password === user.password) {
-        console.log('[POST /substation-login] Plain text match succeeded');
         passwordMatch = true;
       }
     }
 
     if (!passwordMatch) {
-      return res.status(401).json({ message: 'Invalid ID Number or password' });
+      return res.status(401).json({ message: 'Incorrect password. Please try again.' });
     }
 
     if (user.user_id && user.assigned_station_id) {
@@ -486,6 +499,82 @@ router.get('/officer-login-history', authenticateToken, async (req, res) => {
   }
 });
 
+// Send Email OTP endpoint
+router.post('/send-email-otp', async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ message: 'Email is required' });
+    }
+
+    // Basic email format validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ message: 'Invalid email format' });
+    }
+
+    // Check if email is already used by a fully registered user (has id_number)
+    const { data: existingUser } = await supabase
+      .from('users')
+      .select('user_id')
+      .eq('email', email)
+      .not('id_number', 'is', null)
+      .single();
+
+    if (existingUser) {
+      return res.status(400).json({ message: 'Email is already registered' });
+    }
+
+    // Send OTP via Supabase Auth
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: {
+        shouldCreateUser: true, // creates a Supabase Auth user if not exists
+      }
+    });
+
+    if (error) {
+      console.error('[POST /send-email-otp] Supabase error:', error);
+      return res.status(500).json({ message: 'Failed to send OTP', error: error.message });
+    }
+
+    console.log('[POST /send-email-otp] OTP sent to:', email);
+    res.json({ success: true, message: 'OTP sent to your email' });
+  } catch (error) {
+    console.error('Send OTP error:', error);
+    res.status(500).json({ message: 'Failed to send OTP', error: error.message });
+  }
+});
+
+// Verify Email OTP endpoint
+router.post('/verify-email-otp', async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+
+    if (!email || !otp) {
+      return res.status(400).json({ message: 'Email and OTP are required' });
+    }
+
+    const { data, error } = await supabase.auth.verifyOtp({
+      email,
+      token: otp,
+      type: 'email'
+    });
+
+    if (error) {
+      console.error('[POST /verify-email-otp] Verification error:', error);
+      return res.status(400).json({ message: 'Invalid or expired OTP', error: error.message });
+    }
+
+    console.log('[POST /verify-email-otp] OTP verified for:', email);
+    res.json({ success: true, message: 'Email verified successfully' });
+  } catch (error) {
+    console.error('Verify OTP error:', error);
+    res.status(500).json({ message: 'OTP verification failed', error: error.message });
+  }
+});
+
 // Signup endpoint
 router.post('/signup', async (req, res) => {
   try {
@@ -498,7 +587,7 @@ router.post('/signup', async (req, res) => {
       });
     }
 
-    // Check if user already exists
+    // Check if user already exists by ID number
     const { data: existingUser, error: checkError } = await supabase
       .from('users')
       .select('user_id')
@@ -509,6 +598,22 @@ router.post('/signup', async (req, res) => {
       return res.status(400).json({
         message: 'User with this ID already exists'
       });
+    }
+
+    // Check if email is already taken by a fully registered user
+    if (req.body.email) {
+      const { data: existingEmail } = await supabase
+        .from('users')
+        .select('user_id')
+        .eq('email', req.body.email)
+        .not('id_number', 'is', null)
+        .single();
+
+      if (existingEmail) {
+        return res.status(400).json({
+          message: 'A user with this email already exists'
+        });
+      }
     }
 
     // Hash password
@@ -563,21 +668,94 @@ router.post('/signup', async (req, res) => {
         });
       }
     }
-    const { data: newUser, error: insertError } = await supabase
-      .from('users')
-      .insert([{
-        first_name: firstName,
-        last_name: lastName,
-        id_number: idNumber,
-        rank: rank,
-        substation: req.body.substation || null,
-        full_name: fullName,
-        phone_number: placeholderPhone,
-        password: hashedPassword,
-        role: role,
-        assigned_station_id: assignedStationId
-      }])
-      .select();
+    // Look up Supabase Auth UUID if email was verified via OTP
+    let authId = null;
+    if (req.body.email) {
+      const { data: authData } = await supabase.auth.admin.listUsers();
+      const authUser = authData?.users?.find(u => u.email === req.body.email);
+      if (authUser) {
+        authId = authUser.id;
+      }
+    }
+
+    // Check if a user row was auto-created by a DB trigger when OTP was sent
+    // If so, UPDATE that row instead of inserting a new one
+    let newUser, insertError;
+    if (authId) {
+      const { data: existingAuthRow } = await supabase
+        .from('users')
+        .select('user_id')
+        .eq('auth_id', authId)
+        .single();
+
+      if (existingAuthRow) {
+        // Update the auto-created row with the actual signup data
+        const { data, error } = await supabase
+          .from('users')
+          .update({
+            first_name: firstName,
+            middle_name: req.body.middleName || null,
+            last_name: lastName,
+            id_number: idNumber,
+            rank: rank,
+            substation: req.body.substation || null,
+            full_name: fullName,
+            phone_number: placeholderPhone,
+            password: hashedPassword,
+            role: role,
+            assigned_station_id: assignedStationId,
+            email: req.body.email || null
+          })
+          .eq('auth_id', authId)
+          .select();
+        newUser = data;
+        insertError = error;
+      } else {
+        // No auto-created row, insert normally
+        const { data, error } = await supabase
+          .from('users')
+          .insert([{
+            first_name: firstName,
+            middle_name: req.body.middleName || null,
+            last_name: lastName,
+            id_number: idNumber,
+            rank: rank,
+            substation: req.body.substation || null,
+            full_name: fullName,
+            phone_number: placeholderPhone,
+            password: hashedPassword,
+            role: role,
+            assigned_station_id: assignedStationId,
+            email: req.body.email || null,
+            auth_id: authId
+          }])
+          .select();
+        newUser = data;
+        insertError = error;
+      }
+    } else {
+      // No auth_id (no email OTP), insert normally
+      const { data, error } = await supabase
+        .from('users')
+        .insert([{
+          first_name: firstName,
+          middle_name: req.body.middleName || null,
+          last_name: lastName,
+          id_number: idNumber,
+          rank: rank,
+          substation: req.body.substation || null,
+          full_name: fullName,
+          phone_number: placeholderPhone,
+          password: hashedPassword,
+          role: role,
+          assigned_station_id: assignedStationId,
+          email: req.body.email || null,
+          auth_id: authId
+        }])
+        .select();
+      newUser = data;
+      insertError = error;
+    }
 
     if (insertError) {
       return res.status(500).json({

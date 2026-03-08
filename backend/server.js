@@ -56,15 +56,15 @@ app.use(cors({
   credentials: true,
 }));
 
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 
 // ── Auth rate limiting (brute-force protection) ───────────────────────
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 20,
+  max: 10,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { success: false, message: 'Too many attempts. Please try again in 15 minutes.' },
+  message: { success: false, message: 'Too many login attempts. Please try again in 15 minutes.' },
 });
 
 // Create an HTTP server and attach Socket.IO
@@ -248,8 +248,10 @@ io.on('connection', (socket) => {
 
 // ── Route registration ───────────────────────────────────────────────
 
-// Auth routes (no authentication required)
-app.use('/api', authLimiter, authRoutes);
+// Auth routes — rate limit only login endpoints, not all auth routes
+app.post('/api/login', authLimiter);
+app.post('/api/substation-login', authLimiter);
+app.use('/api', authRoutes);
 
 // News routes (web admin — mine/UI-redesign)
 app.use('/api', newsRoutes);

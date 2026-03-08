@@ -1,0 +1,481 @@
+/* ================================
+   SAFETY TIPS (st-) - Grid + Side Panel
+================================ */
+
+/* Category Cards Grid */
+.st-categories-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 32px;
+  margin-bottom: 32px;
+  padding: 8px;
+}
+
+/* Category Card */
+.st-category-card {
+  background: rgba(255,255,255,0.95);
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+  cursor: pointer;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 1px solid rgba(255,255,255,0.2);
+  position: relative;
+  backdrop-filter: blur(20px);
+}
+
+.st-category-card:hover {
+  transform: translateY(-8px) scale(1.02);
+  box-shadow: 0 16px 48px rgba(0,0,0,0.15);
+  border-color: rgba(220, 20, 60, 0.3);
+}
+
+/* Category Card Image */
+.st-category-image {
+  height: 160px;
+  background-size: cover;
+  background-position: center;
+  position: relative;
+}
+
+.st-category-image::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 60px;
+  background: linear-gradient(to top, rgba(0,0,0,0.4), transparent);
+}
+
+/* Hide any badge elements */
+.st-category-badge,
+.st-category-image .st-category-badge,
+.st-category-card .st-category-badge {
+  display: none !important;
+  visibility: hidden !important;
+}
+
+/* Hide any pseudo-elements that might create badges */
+.st-category-image::before,
+.st-category-card::before,
+.st-category-content::before {
+  display: none !important;
+  visibility: hidden !important;
+  content: none !important;
+}
+
+/* Aggressive badge hiding - target any small colored elements */
+.st-category-image [class*="badge"],
+.st-category-card [class*="badge"],
+.st-category-image [style*="border-radius: 50%"],
+.st-category-card [style*="border-radius: 50%"],
+.st-category-image [style*="border-radius: 999"],
+.st-category-card [style*="border-radius: 999"],
+.st-category-image div[style*="width: 12px"],
+.st-category-image div[style*="height: 12px"],
+.st-category-image div[style*="width: 10px"],
+.st-category-image div[style*="height: 10px"] {
+  display: none !important;
+  visibility: hidden !important;
+}
+
+/* Hide any absolutely positioned small elements in category image */
+.st-category-image [style*="position: absolute"] {
+  display: none !important;
+  visibility: hidden !important;
+}
+
+/* Ultra-specific badge hiding */
+.st-category-image > div:not(.st-category-actions):not([class*="btn"]) {
+  display: none !important;
+  visibility: hidden !important;
+}
+
+.st-category-image > div[style*="top"]:not(.st-category-actions) {
+  display: none !important;
+  visibility: hidden !important;
+}
+
+.st-category-image > div[style*="right"]:not(.st-category-actions) {
+  display: none !important;
+  visibility: hidden !important;
+}
+
+/* Target any div in category image that's not the actions */
+.st-category-image div:not(.st-category-actions):not([class*="btn"]):not([class*="action"]) {
+  display: none !important;
+  visibility: hidden !important;
+}
+
+.st-category-actions {
+  display: flex !important;
+  opacity: 1 !important;
+}
+
+/* Category Card Content */
+.st-category-content {
+  padding: 24px;
+  position: relative;
+  background: linear-gradient(135deg, rgba(255,255,255,0.9) 0%, rgba(248,250,252,0.95) 100%);
+}
+
+.st-category-title {
+  font-size: 20px;
+  font-weight: 700;
+  margin: 0 0 12px 0;
+  color: #1e293b;
+  line-height: 1.3;
+}
+
+.st-category-count {
+  font-size: 15px;
+  color: #64748b;
+  margin: 0;
+  font-weight: 500;
+}
+
+/* Category Action Buttons */
+.st-category-actions {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  display: flex !important;
+  gap: 8px;
+  opacity: 1 !important;
+  transition: opacity 0.3s ease;
+}
+
+.st-category-card:hover .st-category-actions {
+  opacity: 1;
+}
+
+.st-category-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  transition: all 0.2s ease;
+  backdrop-filter: blur(8px);
+}
+
+.st-category-btn.edit {
+  background: rgba(255, 255, 255, 0.9);
+  color: #333;
+}
+
+.st-category-btn.edit:hover {
+  background: #333;
+  color: white;
+  transform: scale(1.1);
+}
+
+.st-category-btn.delete {
+  background: rgba(220, 20, 60, 0.9);
+  color: white;
+}
+
+.st-category-btn.delete:hover {
+  background: #dc143c;
+  transform: scale(1.1);
+}
+
+/* Side Panel */
+.st-side-panel {
+  position: fixed;
+  top: 0;
+  right: -400px;
+  width: 400px;
+  height: 100vh;
+  background: white;
+  box-shadow: -4px 0 20px rgba(0,0,0,0.15);
+  transition: right 0.3s ease;
+  z-index: 9998;
+  display: flex;
+  flex-direction: column;
+}
+
+.st-side-panel.open {
+  right: 0;
+}
+
+.st-side-panel-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0,0,0,0.5);
+  z-index: 9997;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.3s ease;
+}
+
+.st-side-panel-overlay.open {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* Side Panel Header */
+.st-side-panel-header {
+  padding: 24px 28px;
+  border-bottom: 1px solid #e9ecef;
+  background: white;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.st-side-panel-title {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0;
+  color: #1a1a1a;
+}
+
+.st-side-panel-close {
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  border: none;
+  background: #f8f9fa;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  color: #666;
+  transition: all 0.2s ease;
+}
+
+.st-side-panel-close:hover {
+  background: #e9ecef;
+  color: #333;
+}
+
+/* Side Panel Body */
+.st-side-panel-body {
+  flex: 1;
+  padding: 36px 28px;
+  overflow-y: auto;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+}
+
+/* Tips Grid in Side Panel */
+.st-tips-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 24px;
+  margin-bottom: 32px;
+}
+
+.st-tip-card {
+  background: rgba(255,255,255,0.9);
+  border: 1px solid rgba(226,232,240,0.8);
+  border-radius: 12px;
+  padding: 24px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
+  backdrop-filter: blur(10px);
+}
+
+.st-tip-card:hover {
+  border-color: rgba(220, 20, 60, 0.3);
+  box-shadow: 0 8px 24px rgba(220, 20, 60, 0.12);
+  transform: translateY(-4px);
+  background: white;
+}
+
+.st-tip-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 20px;
+  gap: 16px;
+}
+
+.st-tip-task {
+  font-size: 17px;
+  font-weight: 600;
+  margin: 0;
+  color: #1e293b;
+  line-height: 1.4;
+  flex: 1;
+}
+
+.st-tip-actions {
+  display: flex;
+  gap: 6px;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.st-tip-card:hover .st-tip-actions {
+  opacity: 1;
+}
+
+.st-tip-action-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  transition: all 0.2s ease;
+}
+
+.st-tip-action-btn.edit {
+  background: #f8f9fa;
+  color: #333;
+}
+
+.st-tip-action-btn.edit:hover {
+  background: #e9ecef;
+}
+
+.st-tip-action-btn.delete {
+  background: #fff5f5;
+  color: #dc143c;
+}
+
+.st-tip-action-btn.delete:hover {
+  background: #ffe0e0;
+}
+
+.st-tip-description {
+  font-size: 15px;
+  color: #475569;
+  line-height: 1.6;
+  margin: 0;
+  font-weight: 400;
+}
+
+/* Empty State */
+.st-empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  color: #6c757d;
+}
+
+.st-empty-state h3 {
+  margin: 0 0 8px 0;
+  font-size: 18px;
+  color: #495057;
+}
+
+.st-empty-state p {
+  margin: 0;
+  font-size: 14px;
+}
+
+/* Add Tip Button */
+.st-add-tip-btn {
+  width: 100%;
+  padding: 12px;
+  background: #dc143c;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-top: 16px;
+}
+
+.st-add-tip-btn:hover {
+  background: #b91c1c;
+}
+
+/* Header Section */
+.st-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 32px;
+  gap: 20px;
+  padding: 20px;
+  background: rgba(255,255,255,0.8);
+  border-radius: 12px;
+  backdrop-filter: blur(10px);
+}
+
+.st-search {
+  flex: 1;
+  max-width: 300px;
+  position: relative;
+}
+
+.st-search-input {
+  width: 100%;
+  padding: 10px 12px 10px 36px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s ease;
+}
+
+.st-search-input:focus {
+  border-color: #dc143c;
+}
+
+.st-search-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 16px;
+  height: 16px;
+  opacity: 0.5;
+}
+
+.st-add-category-btn {
+  padding: 10px 16px;
+  background: #dc143c;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.st-add-category-btn:hover {
+  background: #b91c1c;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .st-categories-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .st-side-panel {
+    width: 100%;
+    right: -100%;
+  }
+  
+  .st-tips-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .st-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .st-search {
+    max-width: none;
+  }
+}

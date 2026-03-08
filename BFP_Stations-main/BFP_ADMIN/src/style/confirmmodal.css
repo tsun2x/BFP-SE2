@@ -1,0 +1,17 @@
+/* Confirm Modal Component Styles
+ * This file extends the base modal system for the ConfirmModal component
+ * For standard modal styles, see modals.css
+ */
+
+@import './modals.css';
+
+/* ConfirmModal specific overrides */
+.modal-message {
+  /* ConfirmModal uses centered text */
+  text-align: center;
+}
+
+.modal-actions {
+  /* ConfirmModal uses centered actions */
+  justify-content: center;
+}

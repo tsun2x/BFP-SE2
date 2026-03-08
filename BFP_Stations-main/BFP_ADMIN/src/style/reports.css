@@ -1,0 +1,1239 @@
+:root{
+  --bg: #f8fafc;
+  --panel: #ffffff;
+  --muted: #64748b;
+  --accent: #6b7280; /* Changed from blue to gray */
+  --danger:  #ef4444;
+  --success: #10b981;
+  --warning: #f59e0b;
+  --surface-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  --border: #e2e8f0;
+}
+
+@import './modals.css';
+
+/* Ensure the whole page content (the part after your left nav) is offset so it doesn't overlap */
+.reports-page { padding: 20px; background: var(--bg); min-height: calc(100vh - 0px); }
+
+.inbox-wrapper { display:flex; gap:24px; max-width:1400px; margin: 0 auto; height: calc(100vh - 50px); }
+
+/* LEFT - inbox list */
+.inbox-left { 
+  width: 100%; 
+  background: var(--panel); 
+  border-radius: 16px; 
+  box-shadow: var(--surface-shadow); 
+  overflow: hidden; 
+  display:flex; 
+  flex-direction:column;
+  transition: width 0.3s ease;
+  border: 1px solid var(--border);
+}
+.inbox-left.has-selected { 
+  width: 380px; 
+}
+.inbox-left-header { 
+  padding:20px 24px; 
+  font-weight:600; 
+  font-size: 18px;
+  border-bottom:1px solid var(--border);
+  background: #fafbfc;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Filter Section */
+.filter-section {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-top: 1px solid var(--border);
+  margin-top: 8px;
+}
+
+.filter-buttons {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.filter-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: white;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.filter-btn:hover {
+  background: #f8fafc;
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.filter-btn.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+}
+
+.filter-btn i {
+  font-size: 12px;
+}
+
+.filter-dropdown-wrapper {
+  position: relative;
+}
+
+.filter-dropdown-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: white;
+  color: var(--muted);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.filter-dropdown-btn:hover {
+  background: #f8fafc;
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.filter-dropdown-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  z-index: 1000;
+  min-width: 120px;
+  overflow: hidden;
+}
+
+.filter-dropdown-menu button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 12px;
+  border: none;
+  background: white;
+  color: #1e293b;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  white-space: nowrap;
+}
+
+.filter-dropdown-menu button:hover {
+  background: #f8fafc;
+}
+
+.filter-dropdown-menu button i {
+  font-size: 12px;
+  width: 16px;
+  text-align: center;
+}
+
+.inbox-header-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+
+.inbox-header-content h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #1e293b;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.inbox-header-content h2 i {
+  color: #1e293b; /* Changed from blue to black */
+  font-size: 16px;
+}
+
+.search-container {
+  position: relative;
+  flex: 1;
+  max-width: 300px;
+}
+
+.search-and-filter {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  justify-content: space-between;
+  width: 100%;
+  flex-wrap: wrap;
+}
+
+.search-input {
+  width: 100%;
+  padding: 10px 16px 10px 40px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 14px;
+  background: var(--panel);
+  transition: border-color 0.2s ease;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.filter-dropdown {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 14px;
+  background: var(--panel);
+  color: #1e293b;
+  cursor: pointer;
+  transition: border-color 0.2s ease;
+  min-width: 150px;
+  flex-shrink: 0;
+}
+
+.filter-dropdown:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+/* Responsive behavior - filter moves to bottom when container shrinks */
+.inbox-left.has-selected .search-and-filter {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.inbox-left.has-selected .search-container {
+  max-width: 100%;
+  width: 100%;
+}
+
+.inbox-left.has-selected .filter-dropdown {
+  width: 100%;
+  min-width: auto;
+}
+
+/* Gmail-style Compose Window */
+.compose-window {
+  position: fixed !important;
+  width: 400px !important;
+  max-height: 500px !important;
+  background: white !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 8px !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15) !important;
+  z-index: 1000 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  transition: all 0.2s ease !important;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+}
+
+.compose-window.minimized {
+  height: 48px;
+}
+
+.compose-window-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: #f8f9fa;
+  border-bottom: 1px solid var(--border);
+  border-radius: 8px 8px 0 0;
+  cursor: move;
+  user-select: none;
+}
+
+.compose-window-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.compose-window-controls {
+  display: flex;
+  gap: 8px;
+}
+
+.compose-window-control {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+
+.compose-window-control:hover {
+  opacity: 0.8;
+}
+
+.compose-window-control.minimize {
+  background: #fbbf24;
+}
+
+.compose-window-control.maximize {
+  background: #34d399;
+}
+
+.compose-window-control.close {
+  background: #ef4444;
+}
+
+.compose-window-body {
+  flex: 1;
+  padding: 16px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.compose-window.minimized .compose-window-body {
+  display: none;
+}
+
+.compose-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.compose-field label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.compose-field input,
+.compose-field textarea {
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 14px;
+  font-family: inherit;
+  transition: border-color 0.2s ease;
+}
+
+.compose-field input:focus,
+.compose-field textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.compose-field textarea {
+  min-height: 120px;
+  resize: vertical;
+}
+
+.compose-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.compose-btn {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.compose-btn.send {
+  background: var(--accent);
+  color: white;
+}
+
+.compose-btn.send:hover {
+  background: #4b5563;
+}
+
+.compose-btn.cancel {
+  background: transparent;
+  color: var(--muted);
+}
+
+.compose-btn.cancel:hover {
+  background: #f3f4f6;
+}
+
+/* Attachment Styles */
+.attachment-area {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.attachment-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: white;
+  color: var(--muted);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  align-self: flex-start;
+}
+
+.attachment-btn:hover {
+  background: #f8fafc;
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.attachment-btn i {
+  font-size: 12px;
+}
+
+.attachments-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+.attachment-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 12px;
+  transition: all 0.2s ease;
+}
+
+.attachment-item:hover {
+  background: #f1f5f9;
+  border-color: var(--accent);
+}
+
+.attachment-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.attachment-info i {
+  color: var(--muted);
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.attachment-name {
+  font-weight: 500;
+  color: #1e293b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+}
+
+.attachment-size {
+  color: var(--muted);
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+.attachment-remove {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  border-radius: 2px;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.attachment-remove:hover {
+  background: #ef4444;
+  color: white;
+}
+
+.attachment-remove i {
+  font-size: 10px;
+}
+
+/* Gmail-style Minimalist Buttons */
+.gmail-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: #5f6368;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 14px;
+  position: relative;
+}
+
+.gmail-btn:hover {
+  background: #f3f4f6;
+  color: #202124;
+}
+
+.gmail-btn:active {
+  background: #e8eaed;
+  transform: scale(0.95);
+}
+
+/* Archive Button - Blue */
+.gmail-btn.archive-btn:hover {
+  background: #e8f0fe;
+  color: #1a73e8;
+}
+
+.gmail-btn.archive-btn:active {
+  background: #d2e3fc;
+  color: #1a73e8;
+}
+
+/* Delete Button - Red */
+.gmail-btn.delete-btn:hover {
+  background: #fce8e6;
+  color: #ea4335;
+}
+
+.gmail-btn.delete-btn:active {
+  background: #f1b2b5;
+  color: #ea4335;
+}
+
+/* Reply Button - Green */
+.gmail-btn.reply-btn:hover {
+  background: #e6f4ea;
+  color: #34a853;
+}
+
+.gmail-btn.reply-btn:active {
+  background: #c8e6c9;
+  color: #34a853;
+}
+
+/* Tooltip for better UX */
+.gmail-btn::after {
+  content: attr(title);
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #3c4043;
+  color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+  margin-bottom: 4px;
+  z-index: 1000;
+}
+
+.gmail-btn:hover::after {
+  opacity: 1;
+}
+
+/* Role-based visibility - Officers can't see delete/archive */
+.gmail-btn.archive-btn.officer-only,
+.gmail-btn.delete-btn.officer-only {
+  display: none !important;
+}
+
+/* Message controls layout */
+.message-controls {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+@media (max-width: 768px) {
+  .inbox-header-content {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+  
+  .search-and-filter {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .search-container {
+    max-width: 100%;
+    width: 100%;
+  }
+  
+  .filter-dropdown {
+    width: 100%;
+    min-width: auto;
+  }
+}
+
+@media (max-width: 500px) {
+  .inbox-left.has-selected {
+    width: 100%;
+  }
+}
+
+.search-icon {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--muted);
+  font-size: 14px;
+  pointer-events: none;
+}
+.search-icon.fa-magnifying-glass {
+  font-size: 14px;
+}
+
+.back-button-content {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  align-self: flex-start;
+  margin-left: auto; /* Push to far right */
+}
+
+.back-button-content:hover {
+  background: var(--panel);
+  color: var(--accent);
+  transform: translateY(-1px);
+}
+
+.back-button-content i {
+  font-size: 12px;
+}
+.inbox-list { overflow-y:auto; max-height: calc(100vh - 120px); }
+
+.inbox-item { 
+  display:flex; 
+  padding:20px 24px; 
+  gap:16px; 
+  cursor:pointer; 
+  border-bottom:1px solid var(--border); 
+  align-items:center; 
+  transition: all 0.2s ease;
+  position: relative;
+}
+.inbox-item:hover { 
+  background: #f8fafc; 
+}
+.inbox-item.active { 
+  background: #f0f9ff; 
+  border-left: 4px solid var(--accent);
+  padding-left: 20px;
+}
+
+.item-left .avatar { 
+  width:48px; 
+  height:48px; 
+  border-radius:50%; 
+  background: #e2e8f0; 
+  display:flex; 
+  align-items:center; 
+  justify-content:center; 
+  font-weight:600; 
+  color:#64748b;
+  font-size: 16px;
+  border: 2px solid #f1f5f9;
+}
+.item-left .avatar i {
+  font-size: 18px;
+  color: #64748b;
+}
+.unread-indicator {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  color: #3b82f6;
+  font-size: 8px;
+}
+.inbox-item {
+  position: relative;
+}
+.item-body { flex:1; min-width:0; }
+.item-top { display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom: 4px; }
+.item-name { font-weight:600; font-size:15px; color: #1e293b; }
+.item-date { color:var(--muted); font-size:13px; }
+.item-subject { 
+  font-size:14px; 
+  color: #334155; 
+  margin-bottom: 6px; 
+  font-weight:500;
+  line-height: 1.4;
+}
+.item-preview { 
+  color:var(--muted); 
+  font-size:13px; 
+  line-height:1.4;
+  display: -webkit-box;
+  display: box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  box-orient: vertical;
+  overflow: hidden;
+}
+
+/* RIGHT - message reader */
+.inbox-right { flex:1; }
+.message-card { 
+  background: var(--panel); 
+  border-radius: 16px; 
+  box-shadow: var(--surface-shadow); 
+  border: 1px solid var(--border);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.message-card-header { 
+  padding:24px 24px 20px 24px;
+  border-bottom:1px solid var(--border);
+  background: #fafbfc;
+  border-radius: 16px 16px 0 0;
+}
+.subject { 
+  margin:0; 
+  font-size:20px; 
+  font-weight:600; 
+  color: #1e293b;
+  margin-bottom: 12px;
+}
+.message-controls { 
+  display:flex; 
+  gap:12px; 
+}
+.small-link { 
+  background: transparent; 
+  border: none; 
+  color: var(--muted); 
+  cursor: pointer; 
+  font-size: 14px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+.small-link:hover {
+  background: var(--bg);
+  color: var(--accent);
+}
+
+.message-sender { 
+  display: flex; 
+  gap:16px; 
+  align-items: center; 
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--border);
+}
+.sender-avatar { 
+  width:56px; 
+  height:56px; 
+  border-radius:50%; 
+  background: #e2e8f0; 
+  display:flex; 
+  align-items:center; 
+  justify-content:center; 
+  font-weight:600; 
+  color:#64748b;
+  font-size: 18px;
+  border: 2px solid #f1f5f9;
+}
+.sender-avatar i {
+  font-size: 20px;
+  color: #64748b;
+}
+.sender-meta { flex:1; }
+.sender-meta .sender-name { 
+  font-weight:600; 
+  font-size: 16px;
+  color: #1e293b;
+  margin-bottom: 4px;
+}
+.sender-email { 
+  color:var(--muted); 
+  font-size:14px; 
+}
+
+.message-content { 
+  flex: 1;
+  padding: 24px;
+  overflow-y: auto;
+  line-height: 1.6;
+  color: #334155;
+  font-size: 15px;
+}
+.message-content p {
+  margin-bottom: 16px;
+}
+.message-content p:last-child {
+  margin-bottom: 0;
+}
+
+.composer { 
+  border-top:1px solid var(--border); 
+  padding:20px 24px; 
+  background: #fafbfc;
+  border-radius: 0 0 16px 16px;
+}
+.composer-textarea { 
+  width:100%; 
+  min-height:100px; 
+  border-radius:12px; 
+  padding:16px; 
+  border:1px solid var(--border); 
+  resize:vertical;
+  font-family: inherit;
+  font-size: 14px;
+  transition: border-color 0.2s ease;
+}
+.composer-textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.composer-actions { 
+  display:flex; 
+  gap:12px; 
+  margin-top: 16px;
+  justify-content: flex-end;
+}
+
+/* Reply Form Textarea */
+.reply-textarea {
+  width: 100%;
+  max-width: 700px;
+  min-height: 120px;
+  border-radius: 12px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  resize: vertical;
+  font-family: inherit;
+  font-size: 14px;
+  transition: border-color 0.2s ease;
+  box-sizing: border-box;
+  line-height: 1.5;
+}
+
+.reply-textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+/* Button styles */
+.btn {
+  padding: 10px 20px;
+  border-radius: 10px;
+  font-weight: 500;
+  font-size: 14px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.btn-primary {
+  background: var(--accent);
+  color: white;
+}
+.btn-primary:hover {
+  background: #2563eb;
+  transform: translateY(-1px);
+}
+.btn-secondary {
+  background: var(--bg);
+  color: var(--muted);
+  border: 1px solid var(--border);
+}
+.btn-secondary:hover {
+  background: #f1f5f9;
+}
+.btn-danger {
+  background: var(--danger);
+  color: white;
+}
+.btn-danger:hover {
+  background: #dc2626;
+  transform: translateY(-1px);
+}
+
+/* Reports page specific modal overrides */
+.modal-message {
+  margin-bottom: 40px !important;
+}
+
+/* utility */
+.empty-state { 
+  padding:60px; 
+  text-align:center; 
+  color:var(--muted);
+  font-size: 16px;
+}
+.empty-state-icon {
+  text-align: center;
+  padding: 40px;
+  color: #cbd5e1;
+}
+.empty-state-icon i {
+  font-size: 48px;
+  margin-bottom: 16px;
+  display: block;
+}
+
+/* Quick Report Styles */
+.quick-report-avatar {
+  background: linear-gradient(135deg, #ef4444, #dc2626) !important;
+  color: white !important;
+}
+
+.report-type-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  background: white;
+  border: 2px solid var(--border);
+  border-radius: 12px;
+  padding: 2px 6px;
+  font-size: 10px;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 20px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.report-type-badge.fire-ok {
+  background: #fef3c7;
+  border-color: #f59e0b;
+  color: #92400e;
+}
+
+.report-type-badge.need-backup {
+  background: #fee2e2;
+  border-color: #ef4444;
+  color: #991b1b;
+}
+
+.report-type-badge.emergency {
+  background: #fecaca;
+  border-color: #dc2626;
+  color: #7f1d1d;
+  animation: pulse 2s infinite;
+}
+
+.report-type-badge.status {
+  background: #dbeafe;
+  border-color: #3b82f6;
+  color: #1e40af;
+}
+
+.report-type-badge.arrived {
+  background: #d1fae5;
+  border-color: #10b981;
+  color: #065f46;
+}
+
+.report-type-badge.cleared {
+  background: #d1fae5;
+  border-color: #10b981;
+  color: #065f46;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+}
+
+/* Quick Report Message Styles */
+.sender-location {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+.sender-location i {
+  font-size: 10px;
+}
+
+/* Reply Modal Styles */
+.reply-textarea {
+  width: 100%;
+  min-height: 120px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 14px;
+  resize: vertical;
+}
+
+.reply-textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.modal-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
+/* Fire Truck Item Indicator */
+.fire-truck-item {
+  border-left: 4px solid #ef4444;
+}
+
+/* Fire Truck Report Form Styles */
+.fire-truck-report-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.fire-truck-report-card {
+  background: white;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 600px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+}
+
+.fire-truck-report-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  color: white;
+  border-radius: 12px 12px 0 0;
+}
+
+.fire-truck-report-header h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.fire-truck-report-header .close-btn {
+  background: none;
+  border: none;
+  color: white;
+  font-size: 24px;
+  cursor: pointer;
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  transition: background 0.2s;
+}
+
+.fire-truck-report-header .close-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.fire-truck-report-form {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.fire-truck-report-form .form-row {
+  display: flex;
+  gap: 16px;
+}
+
+.fire-truck-report-form .form-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.fire-truck-report-form .form-item label {
+  font-weight: 500;
+  color: #374151;
+  font-size: 14px;
+}
+
+.fire-truck-report-form .form-item input,
+.fire-truck-report-form .form-item select,
+.fire-truck-report-form .form-item textarea {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 14px;
+  transition: border-color 0.2s;
+}
+
+.fire-truck-report-form .form-item input:focus,
+.fire-truck-report-form .form-item select:focus,
+.fire-truck-report-form .form-item textarea:focus {
+  outline: none;
+  border-color: #ef4444;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
+}
+
+.fire-truck-report-form .form-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
+.fire-truck-report-form .btn {
+  padding: 10px 20px;
+  border-radius: 6px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: none;
+}
+
+.fire-truck-report-form .btn-primary {
+  background: #ef4444;
+  color: white;
+}
+
+.fire-truck-report-form .btn-primary:hover {
+  background: #dc2626;
+  transform: translateY(-1px);
+}
+
+.fire-truck-report-form .btn-secondary {
+  background: var(--bg);
+  color: var(--muted);
+  border: 1px solid var(--border);
+}
+
+.fire-truck-report-form .btn-secondary:hover {
+  background: #f1f5f9;
+}
+
+/* Fire Truck Report Button */
+.fire-truck-btn {
+  background: linear-gradient(135deg, #ef4444, #dc2626) !important;
+  color: white !important;
+  border: none !important;
+  margin-left: 8px !important;
+}
+
+.fire-truck-btn:hover {
+  background: linear-gradient(135deg, #dc2626, #b91c1c) !important;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+}
+
+/* Composer form (Gmail-like) */
+.composer-form { display:flex; flex-direction:column; gap:12px; }
+.composer-fields { display:flex; gap:12px; align-items:center; }
+.composer-to { min-width: 220px; max-width: 380px; }
+.composer-subject { flex:1; }
+.composer-textarea { min-height: 220px; }
+.composer-toolbar { display:flex; justify-content:space-between; align-items:center; gap:12px; padding-top:8px; }
+.composer-left .btn { padding:8px 10px; border-radius:8px; }
+.composer-right { display:flex; gap:8px; align-items:center; }
+.composer-send { border-radius: 999px; padding: 10px 20px; }
+
+/* Small screens: stack fields */
+@media (max-width: 600px) {
+  .composer-fields { flex-direction: column; align-items: stretch; }
+  .composer-to { width: 100%; }
+}
+
+/* Keep layout desktop-first as requested */
+@media (max-width: 1000px) {
+  .reports-page { padding: 16px; }
+  .inbox-wrapper { flex-direction:column; }
+  .inbox-left { width:100%; }
+}

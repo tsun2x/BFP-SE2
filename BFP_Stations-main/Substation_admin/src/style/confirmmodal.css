@@ -1,3 +1,7 @@
+/* Confirm Modal Component Styles
+ * Simple centered design with bottom-left buttons
+ */
+
 .modal-overlay {
   position: fixed;
   top: 0;
@@ -13,53 +17,90 @@
 
 .modal-card {
   background: #fff;
-  width: 360px;
-  padding: 22px;
-  border-radius: 14px;
-  box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+  width: 420px;
+  max-width: 95%;
+  padding: 40px 32px 32px;
+  border-radius: 12px;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.1);
   animation: fadeIn 0.25s ease;
+  text-align: center;
+  border: 1px solid #e2e8f0;
+  position: relative;
 }
 
+/* Centered Bold Title */
 .modal-title {
-  font-size: 21px;
-  font-weight: 600;
-  margin-bottom: 14px;
+  font-size: 18px;
+  font-weight: 700;
+  margin: 0 0 24px 0;
+  color: #1e293b;
+  text-align: center;
 }
 
+/* Modal Message - Details at bottom */
 .modal-message {
   font-size: 14px;
-  margin-bottom: 20px;
-  line-height: 1.4;
-  color: #444;
+  line-height: 1.5;
+  color: #64748b;
+  margin: 0 0 32px 0;
+  text-align: center;
 }
 
+/* Modal Actions - Buttons on left side */
 .modal-actions {
   display: flex;
-  justify-content: flex-end;
+  justify-content: flex-start;
   gap: 12px;
+  margin-top: 24px;
 }
 
+/* Simple Modal Buttons - No Icons */
 .modal-btn {
-  padding: 8px 16px;
+  padding: 10px 20px;
   border-radius: 8px;
   border: none;
   cursor: pointer;
   font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  min-width: 80px;
 }
 
 .modal-btn.cancel {
-  background: #e3e3e3;
-  color: #333;
+  background: #f8fafc;
+  color: #64748b;
+  border: 1px solid #e2e8f0;
+}
+
+.modal-btn.cancel:hover {
+  background: #f1f5f9;
+  color: #475569;
 }
 
 .modal-btn.confirm {
-  background: #dc2626;
+  background: #dc143c;
   color: white;
-  font-weight: 600;
 }
 
 .modal-btn.confirm:hover {
   background: #b91c1c;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .modal-card {
+    width: 95%;
+    padding: 32px 24px 24px;
+  }
+  
+  .modal-actions {
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .modal-btn {
+    width: 100%;
+  }
 }
 
 @keyframes fadeIn {

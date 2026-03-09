@@ -105,10 +105,10 @@ export default function IncidentReportModal({ alarmId, onClose }) {
         {/* Header */}
         <div style={styles.header}>
           <div>
-            <div style={styles.headerTitle}>📋 Incident Report</div>
+            <div style={styles.headerTitle}><i className="fa-solid fa-file-lines"></i> Incident Report</div>
             <div style={styles.headerSub}>Alarm #{alarmId}</div>
           </div>
-          <button style={styles.closeBtn} onClick={onClose}>✕</button>
+          <button style={styles.closeBtn} onClick={onClose}><i className="fa-solid fa-times"></i></button>
         </div>
 
         {loading && <div style={styles.loading}>Loading incident data...</div>}
@@ -196,7 +196,7 @@ export default function IncidentReportModal({ alarmId, onClose }) {
               {success && <div style={styles.success}>{success}</div>}
 
               <button style={styles.submitBtn} type="submit" disabled={saving}>
-                {saving ? 'Saving...' : reportData.report ? '💾 Update Report' : '💾 Submit Report'}
+                {saving ? 'Saving...' : reportData.report ? <><i className="fa-solid fa-save"></i> Update Report</> : <><i className="fa-solid fa-save"></i> Submit Report</>}
               </button>
             </form>
 
@@ -207,19 +207,19 @@ export default function IncidentReportModal({ alarmId, onClose }) {
                 onClick={handleDownloadPDF}
                 disabled={!!downloading}
               >
-                {downloading === 'pdf' ? 'Generating...' : '📄 Download PDF'}
+                {downloading === 'pdf' ? 'Generating...' : <><i className="fa-solid fa-file-pdf"></i> Download PDF</>}
               </button>
               <button
                 style={styles.docxBtn}
                 onClick={handleDownloadDOCX}
                 disabled={!!downloading}
               >
-                {downloading === 'docx' ? 'Generating...' : '📝 Download DOCX'}
+                {downloading === 'docx' ? 'Generating...' : <><i className="fa-solid fa-file-word"></i> Download DOCX</>}
               </button>
             </div>
             {!reportData.report && (
               <div style={styles.hint}>
-                💡 Submit the report first to include full details in the download.
+                <i className="fa-solid fa-lightbulb"></i> Submit the report first to include full details in the download.
               </div>
             )}
           </>
@@ -235,58 +235,58 @@ const styles = {
     display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999,
   },
   modal: {
-    background: '#1a1a2e', color: '#e0e0e0', borderRadius: 12,
+    background: '#ffffff', color: '#333333', borderRadius: 12,
     width: '100%', maxWidth: 560, maxHeight: '90vh', overflowY: 'auto',
-    boxShadow: '0 8px 40px rgba(0,0,0,0.5)', padding: 0,
+    boxShadow: '0 8px 40px rgba(0,0,0,0.15)', padding: 0,
   },
   header: {
     display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
-    background: '#c81e1e', padding: '16px 20px', borderRadius: '12px 12px 0 0',
+    background: '#8B0000', padding: '16px 20px', borderRadius: '12px 12px 0 0',
   },
   headerTitle: { fontSize: 18, fontWeight: 700, color: '#fff' },
   headerSub: { fontSize: 13, color: 'rgba(255,255,255,0.8)', marginTop: 2 },
   closeBtn: {
-    background: 'none', border: 'none', color: '#fff', fontSize: 20,
+    background: 'none', border: 'none', color: '#fff', fontSize: 16,
     cursor: 'pointer', lineHeight: 1, padding: 4,
   },
-  loading: { padding: 32, textAlign: 'center', color: '#aaa' },
+  loading: { padding: 32, textAlign: 'center', color: '#666' },
   summaryBox: {
-    background: '#0f0f1e', margin: '16px 20px 0', borderRadius: 8,
-    padding: '12px 16px', fontSize: 13,
+    background: '#f8f9fa', margin: '16px 20px 0', borderRadius: 8,
+    padding: '12px 16px', fontSize: 13, border: '1px solid #e9ecef',
   },
   summaryRow: { display: 'flex', gap: 10, marginBottom: 4 },
-  summaryLabel: { fontWeight: 700, minWidth: 100, color: '#c81e1e' },
+  summaryLabel: { fontWeight: 700, minWidth: 100, color: '#8B0000' },
   form: { padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 10 },
-  label: { fontSize: 12, fontWeight: 600, color: '#bbb', marginBottom: 2 },
+  label: { fontSize: 12, fontWeight: 600, color: '#495057', marginBottom: 2 },
   input: {
-    background: '#0f0f1e', border: '1px solid #333', borderRadius: 6,
-    color: '#e0e0e0', padding: '8px 10px', fontSize: 13, width: '100%', boxSizing: 'border-box',
+    background: '#ffffff', border: '1px solid #ced4da', borderRadius: 6,
+    color: '#333333', padding: '8px 10px', fontSize: 13, width: '100%', boxSizing: 'border-box',
   },
   row3: { display: 'flex', gap: 12 },
   submitBtn: {
-    background: '#c81e1e', color: '#fff', border: 'none', borderRadius: 8,
+    background: '#8B0000', color: '#fff', border: 'none', borderRadius: 8,
     padding: '10px 0', fontSize: 14, fontWeight: 700, cursor: 'pointer', marginTop: 4,
   },
   downloadRow: {
     display: 'flex', gap: 12, padding: '0 20px 12px',
   },
   pdfBtn: {
-    flex: 1, background: '#1565c0', color: '#fff', border: 'none',
+    flex: 1, background: '#8B0000', color: '#fff', border: 'none',
     borderRadius: 8, padding: '10px 0', fontSize: 13, fontWeight: 600, cursor: 'pointer',
   },
   docxBtn: {
-    flex: 1, background: '#2e7d32', color: '#fff', border: 'none',
+    flex: 1, background: '#28a745', color: '#fff', border: 'none',
     borderRadius: 8, padding: '10px 0', fontSize: 13, fontWeight: 600, cursor: 'pointer',
   },
   hint: {
-    padding: '0 20px 16px', fontSize: 12, color: '#888', textAlign: 'center',
+    padding: '0 20px 16px', fontSize: 12, color: '#6c757d', textAlign: 'center',
   },
   errorBox: {
-    background: '#3b0000', color: '#ff6b6b', borderRadius: 6,
-    padding: '8px 12px', fontSize: 13, margin: '0 20px',
+    background: '#f8d7da', color: '#721c24', borderRadius: 6,
+    padding: '8px 12px', fontSize: 13, margin: '0 20px', border: '1px solid #f5c6cb',
   },
   success: {
-    background: '#003b00', color: '#6bff6b', borderRadius: 6,
-    padding: '8px 12px', fontSize: 13,
+    background: '#d4edda', color: '#155724', borderRadius: 6,
+    padding: '8px 12px', fontSize: 13, border: '1px solid #c3e6cb',
   },
 };

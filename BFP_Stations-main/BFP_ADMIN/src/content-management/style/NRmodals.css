@@ -4,7 +4,7 @@
 
 @import '../../style/modals.css';
 
-/* Confirmation Modal Overrides */
+/* Confirmation Modal Overrides - Simple Centered Design */
 .confirm-modal-backdrop {
   position: fixed;
   inset: 0;
@@ -18,72 +18,61 @@
 
 .confirm-modal {
   background: white;
-  border-radius: 16px;
-  padding: 32px;
-  max-width: 400px;
-  width: 90%;
+  border-radius: 12px;
+  padding: 40px 32px 32px;
+  width: 420px;
+  max-width: 95%;
   text-align: center;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 10px 25px rgba(0,0,0,0.1);
   animation: modalFadeIn 0.25s ease;
   border: 1px solid #e2e8f0;
+  position: relative;
 }
 
+/* Hide Icons for Simple Design */
 .confirm-modal-icon {
-  margin-bottom: 20px;
+  display: none;
 }
 
 .confirm-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 64px;
-  height: 64px;
-  border-radius: 50%;
-  font-size: 28px;
-  font-weight: bold;
+  display: none;
 }
 
-.confirm-icon--danger {
-  background: #fee2e2;
-  color: #dc143c; /* Crimson Red */
-}
-
-.confirm-icon--save {
-  background: #dcfce7;
-  color: #16a34a;
-}
-
+/* Centered Bold Title */
 .confirm-modal-title {
-  margin: 0 0 20px 0;
-  font-size: 20px;
-  font-weight: 600;
+  margin: 0 0 24px 0;
+  font-size: 18px;
+  font-weight: 700;
   color: #1e293b;
+  text-align: center;
 }
 
+/* Modal Message - Details at bottom */
 .confirm-modal-message {
   margin: 0 0 32px 0;
   color: #64748b;
   line-height: 1.5;
+  text-align: center;
 }
 
+/* Modal Actions - Buttons on left side */
 .confirm-modal-actions {
   display: flex;
-  gap: 16px;
-  justify-content: center;
+  gap: 12px;
+  justify-content: flex-start;
+  margin-top: 24px;
 }
 
+/* Simple Modal Buttons - No Icons */
 .confirm-btn {
   padding: 10px 20px;
   border: none;
-  border-radius: 10px;
+  border-radius: 8px;
   font-weight: 500;
   font-size: 14px;
   cursor: pointer;
   transition: all 0.2s ease;
-  min-width: 100px;
-  display: inline-flex;
-  align-items: center;
-  gap: 12px;
+  min-width: 80px;
 }
 
 .confirm-btn--cancel {
@@ -94,7 +83,7 @@
 
 .confirm-btn--cancel:hover {
   background: #f1f5f9;
-  transform: translateY(-1px);
+  color: #475569;
 }
 
 .confirm-btn--delete {
@@ -104,7 +93,6 @@
 
 .confirm-btn--delete:hover {
   background: #b91c1c;
-  transform: translateY(-1px);
 }
 
 .confirm-btn--save {
@@ -114,16 +102,14 @@
 
 .confirm-btn--save:hover {
   background: #b91c1c;
-  transform: translateY(-1px);
 }
 
 .confirm-btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
-  transform: none !important;
 }
 
-/* Content Management Modal Overrides */
+/* Content Management Modal Overrides - Simple Design */
 .modal-backdrop {
   position: fixed;
   inset: 0;
@@ -137,29 +123,31 @@
 
 .modal {
   background: white;
-  border-radius: 16px;
+  border-radius: 12px;
   max-width: 920px;
   width: 90%;
   max-height: 90vh;
   overflow-y: auto;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 10px 25px rgba(0,0,0,0.1);
   animation: modalFadeIn 0.25s ease;
   border: 1px solid #e2e8f0;
 }
 
 .modal-header {
-  padding: 20px 24px 16px;
+  padding: 40px 32px 16px;
   border-bottom: 1px solid #e5e7eb;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
+  position: relative;
 }
 
 .modal-header h3 {
   margin: 0;
   font-size: 18px;
-  font-weight: 600;
+  font-weight: 700;
   color: #1e293b;
+  text-align: center;
 }
 
 .modal-close {
@@ -175,15 +163,18 @@
   align-items: center;
   justify-content: center;
   transition: all 0.2s ease;
+  position: absolute;
+  top: 32px;
+  right: 32px;
 }
 
 .modal-close:hover {
   background: #f8fafc;
-  color: #dc143c; /* Crimson Red */
+  color: #dc143c;
 }
 
 .modal-body {
-  padding: 24px;
+  padding: 24px 32px 32px;
 }
 
 /* Notification Styles */
@@ -279,12 +270,14 @@
 /* Mobile Responsive Enhancements */
 @media (max-width: 640px) {
   .confirm-modal {
-    padding: 24px;
+    padding: 32px 24px 24px;
+    width: 95%;
     margin: 20px;
   }
   
   .confirm-modal-actions {
     flex-direction: column;
+    gap: 8px;
   }
   
   .confirm-btn {
@@ -303,10 +296,15 @@
   }
   
   .modal-header {
-    padding: 16px 20px 12px;
+    padding: 32px 24px 16px;
+  }
+  
+  .modal-close {
+    top: 24px;
+    right: 24px;
   }
   
   .modal-body {
-    padding: 20px;
+    padding: 20px 24px 24px;
   }
 }

@@ -9,6 +9,9 @@ export default function Settings() {
   const { user, logout } = useContext(AuthContext);
   const [activeTab, setActiveTab] = useState("profile");
   const [geoLoading, setGeoLoading] = useState(false);
+  const [geoAccuracyMeters, setGeoAccuracyMeters] = useState(null);
+  const [geoQuery, setGeoQuery] = useState('');
+  const [geoSearchLoading, setGeoSearchLoading] = useState(false);
   const [stationSaved, setStationSaved] = useState(false);
   const toast = useToast();
   const [isLoadingStations, setIsLoadingStations] = useState(false);
@@ -30,6 +33,7 @@ export default function Settings() {
     stationName: user?.stationInfo?.station_name || "",
     latitude: user?.stationInfo?.latitude || "",
     longitude: user?.stationInfo?.longitude || "",
+    address: user?.stationInfo?.address || "",
     contactNumber: "",
   });
   const [stations, setStations] = useState([]);
@@ -87,6 +91,7 @@ export default function Settings() {
           stationName: user.stationInfo.station_name || "",
           latitude: user.stationInfo.latitude || "",
           longitude: user.stationInfo.longitude || "",
+          address: user.stationInfo.address || "",
           contactNumber: user.stationInfo.contact_number || "",
           stationType: user.stationInfo.station_type || "Substation",
         });
@@ -151,6 +156,35 @@ export default function Settings() {
     setNotifications(prev => ({ ...prev, [key]: !prev[key] }));
   };
 
+  const handleSearchCoordinates = async () => {
+    const q = (geoQuery || '').trim();
+    if (!q) {
+      toast.error('Please type a location to search');
+      return;
+    }
+    setGeoSearchLoading(true);
+    try {
+      const res = await apiClient.get(`/geocode?q=${encodeURIComponent(q)}&limit=1`);
+      const top = res?.results?.[0] || null;
+      const lat = top?.lat !== undefined ? Number(top.lat) : NaN;
+      const lng = top?.lon !== undefined ? Number(top.lon) : NaN;
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+        toast.error('No coordinates found for that location');
+        return;
+      }
+      setStationSettings((prev) => ({
+        ...prev,
+        latitude: lat.toFixed(8),
+        longitude: lng.toFixed(8),
+      }));
+      toast.success('Coordinates updated from search');
+    } catch (e) {
+      toast.error(e?.message || 'Failed to search coordinates');
+    } finally {
+      setGeoSearchLoading(false);
+    }
+  };
+
   const handleProfileChange = (field, value) => {
     setProfile(prev => ({ ...prev, [field]: value }));
   };
@@ -165,10 +199,14 @@ export default function Settings() {
 
   const handleGetCoordinates = () => {
     setGeoLoading(true);
+    setGeoAccuracyMeters(null);
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (position) => {
-          const { latitude, longitude } = position.coords;
+          const { latitude, longitude, accuracy } = position.coords;
+          if (typeof accuracy === 'number' && Number.isFinite(accuracy)) {
+            setGeoAccuracyMeters(accuracy);
+          }
           setStationSettings(prev => ({
             ...prev,
             latitude: latitude.toFixed(8),
@@ -180,6 +218,11 @@ export default function Settings() {
           console.error("Geolocation error:", error);
             toast.error("Unable to get your location. Please check browser permissions.");
           setGeoLoading(false);
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 20000,
+          maximumAge: 0,
         }
       );
     } else {
@@ -223,6 +266,7 @@ export default function Settings() {
           await apiClient.put(`/firestations/${editingStationId}`, {
             stationName: stationSettings.stationName,
             contactNumber: stationSettings.contactNumber || null,
+            address: stationSettings.address?.trim() ? stationSettings.address.trim() : null,
             latitude: lat,
             longitude: lng,
           });
@@ -231,6 +275,7 @@ export default function Settings() {
           await apiClient.post(`/firestations`, {
             stationName: stationSettings.stationName,
             contactNumber: stationSettings.contactNumber || null,
+            address: stationSettings.address?.trim() ? stationSettings.address.trim() : null,
             latitude: lat,
             longitude: lng,
             stationType: stationSettings.stationType || "Substation",
@@ -309,8 +354,10 @@ export default function Settings() {
         contactNumber: s.contact_number || "",
         latitude: s.latitude || "",
         longitude: s.longitude || "",
+        address: s.address || "",
         stationType: s.station_type || "Substation",
       });
+      setGeoQuery('');
       setEditingStationId(id);
       // show the edit form in a modal instead of the right-side panel
       setShowFormModal(true);
@@ -346,7 +393,8 @@ export default function Settings() {
   };
 
   const handleCreateClick = () => {
-    setStationSettings({ stationName: '', contactNumber: '', latitude: '', longitude: '', stationType: 'Substation' });
+    setStationSettings({ stationName: '', contactNumber: '', latitude: '', longitude: '', address: '', stationType: 'Substation' });
+    setGeoQuery('');
     setEditingStationId(null);
     setShowFormModal(true);
   };
@@ -731,6 +779,11 @@ export default function Settings() {
                           <div key={s.station_id} style={{ border: '1px solid #eee', borderRadius: 8, padding: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#fff' }}>
                             <div>
                               <div style={{ fontWeight: 600 }}>{s.station_name}</div>
+                              {(s.address || s.station_address) && (
+                                <div style={{ color: '#666', marginTop: 6, fontSize: 13 }}>
+                                  <strong>Address:</strong> {s.address || s.station_address}
+                                </div>
+                              )}
                               <div style={{ color: '#555', marginTop: 6 }}>
                                 <strong>Contact:</strong> {s.contact_number || s.contactNumber || '-'}
                               </div>
@@ -762,6 +815,49 @@ export default function Settings() {
                             <label>Contact Number</label>
                             <input type="text" value={stationSettings.contactNumber} onChange={(e) => handleStationChange('contactNumber', e.target.value)} />
                           </div>
+                          <div className="form-group">
+                            <label>Address</label>
+                            <input
+                              type="text"
+                              value={stationSettings.address}
+                              onChange={(e) => handleStationChange('address', e.target.value)}
+                              placeholder="Street / Barangay / City"
+                            />
+                          </div>
+                          <div className="form-group">
+                            <label>Search Location</label>
+                            <div style={{ display: 'flex', gap: 8 }}>
+                              <input
+                                type="text"
+                                value={geoQuery}
+                                onChange={(e) => setGeoQuery(e.target.value)}
+                                placeholder='e.g. "Victoria, Zamboanga City"'
+                              />
+                              <button
+                                type="button"
+                                className="btn btn-outline"
+                                onClick={handleSearchCoordinates}
+                                disabled={geoSearchLoading || isSavingStation}
+                              >
+                                {geoSearchLoading ? 'Searching...' : 'Search Coordinates'}
+                              </button>
+                            </div>
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 6 }}>
+                            <button
+                              type="button"
+                              className="btn btn-outline"
+                              onClick={handleGetCoordinates}
+                              disabled={geoLoading || isSavingStation}
+                            >
+                              {geoLoading ? 'Getting coordinates...' : 'Get Coordinates'}
+                            </button>
+                          </div>
+                          {geoAccuracyMeters !== null && (
+                            <div style={{ marginTop: 6, fontSize: 12, color: '#666', textAlign: 'right' }}>
+                              Accuracy: ~{Math.round(Number(geoAccuracyMeters))} m
+                            </div>
+                          )}
                           <div className="form-row">
                             <div className="form-group">
                               <label>Latitude</label>

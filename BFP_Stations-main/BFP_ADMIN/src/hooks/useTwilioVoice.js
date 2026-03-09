@@ -68,6 +68,25 @@ export default function useTwilioVoice(identity, authToken, options = {}) {
       }
 
       try {
+        if (navigator?.mediaDevices?.getUserMedia) {
+          const s = await navigator.mediaDevices.getUserMedia({ audio: true });
+          try {
+            s.getTracks().forEach((t) => t.stop());
+          } catch (_) {}
+        }
+      } catch (err) {
+        const msg = err?.name === 'NotFoundError'
+          ? 'No microphone device found. Connect/enable a microphone and allow browser microphone access.'
+          : (err?.message || String(err));
+        console.error('[TwilioVoice] Microphone preflight failed:', err);
+        if (!cancelled) {
+          setError(msg);
+          setStatus('offline');
+        }
+        return;
+      }
+
+      try {
         const dev = new Device(token, {
           logLevel: 1,
           codecPreferences: ['opus', 'pcmu'],
@@ -87,8 +106,11 @@ export default function useTwilioVoice(identity, authToken, options = {}) {
           const callTo = call.parameters.To || '';
           console.log(`[TwilioVoice] Incoming call from: ${call.parameters.From}, To: ${callTo}, myIdentity: client:${identity}`);
           // Reject calls not addressed to this identity (prevents bleed across browser tabs)
-          if (callTo && callTo !== `client:${identity}`) {
-            console.warn(`[TwilioVoice] Rejecting misrouted call (To=${callTo}, expected client:${identity})`);
+          // Twilio may send To as either "client:IDENTITY" or "IDENTITY" depending on SDK/webhook params.
+          const expectedA = `client:${identity}`;
+          const expectedB = `${identity}`;
+          if (callTo && callTo !== expectedA && callTo !== expectedB) {
+            console.warn(`[TwilioVoice] Rejecting misrouted call (To=${callTo}, expected ${expectedA} or ${expectedB})`);
             try { call.reject(); } catch (_) {}
             return;
           }
@@ -167,7 +189,17 @@ export default function useTwilioVoice(identity, authToken, options = {}) {
   // ── Accept incoming call ──────────────────────────────────────────
   const acceptIncoming = useCallback(() => {
     if (!incomingCall) return;
-    incomingCall.accept();
+    try {
+      incomingCall.accept();
+    } catch (err) {
+      console.error('[TwilioVoice] acceptIncoming error:', err);
+      setError(err?.name === 'NotFoundError'
+        ? 'No microphone device found. Connect/enable a microphone and allow browser microphone access.'
+        : (err?.message || String(err)));
+      setIncomingCall(null);
+      setStatus('ready');
+      return;
+    }
 
     incomingCall.on('disconnect', () => {
       setActiveCall(null);

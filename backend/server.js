@@ -18,6 +18,7 @@ import newsRoutes from './routes/newsRoutes.js';
 import safetyRoutes from './routes/safetyRoutes.js';
 import contactRoutes from './routes/contactRoutes.js';
 import messageRoutes from './routes/messageRoutes.js';
+import geocodeRoutes from './routes/geocodeRoutes.js';
 import twilioCallbacksRoutes from './routes/twilioCallbacks.js';
 import twilioTokenRoutes from './routes/twilioTokenRoutes.js';
 
@@ -288,6 +289,9 @@ app.use('/api', compatibilityRoutes);
 
 // Messaging routes (web admin — mine/UI-redesign)
 app.use('/api', messageRoutes);
+
+// Geocoding proxy routes (Nominatim)
+app.use('/api', geocodeRoutes);
 
 // Twilio callbacks — unauthenticated, accepts Twilio webhooks only (mark2/main)
 app.use('/api', twilioCallbacksRoutes);

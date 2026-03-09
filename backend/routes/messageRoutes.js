@@ -12,6 +12,69 @@ const upload = multer({
 
 const router = express.Router();
 
+const MESSAGE_ATTACHMENTS_BUCKET = process.env.MESSAGE_ATTACHMENTS_BUCKET || 'message-attachments';
+
+const extractBucketAndPathFromStorageUrl = (fileUrl) => {
+  if (!fileUrl || typeof fileUrl !== 'string') return null;
+  try {
+    const u = new URL(fileUrl);
+    const parts = u.pathname.split('/').filter(Boolean);
+
+    // Expected patterns (Supabase Storage):
+    // /storage/v1/object/public/<bucket>/<path>
+    // /storage/v1/object/sign/<bucket>/<path>
+    const objIdx = parts.findIndex((p) => p === 'object');
+    if (objIdx === -1) return null;
+
+    const kind = parts[objIdx + 1];
+    if (kind !== 'public' && kind !== 'sign') return null;
+
+    const bucket = parts[objIdx + 2];
+    const path = parts.slice(objIdx + 3).join('/');
+    if (!bucket || !path) return null;
+    return { bucket, path };
+  } catch {
+    return null;
+  }
+};
+
+const withAttachmentDownloadUrls = async (messages) => {
+  const rows = Array.isArray(messages) ? messages : [];
+  const out = [];
+
+  for (const m of rows) {
+    const atts = Array.isArray(m.message_attachments) ? m.message_attachments : [];
+    if (atts.length === 0) {
+      out.push(m);
+      continue;
+    }
+
+    const mappedAtts = [];
+    for (const att of atts) {
+      const info = extractBucketAndPathFromStorageUrl(att.file_url);
+      if (!info) {
+        mappedAtts.push({ ...att, download_url: att.file_url || null });
+        continue;
+      }
+
+      try {
+        const { data, error } = await supabase.storage.from(info.bucket).createSignedUrl(info.path, 60 * 60);
+        if (error) {
+          mappedAtts.push({ ...att, download_url: att.file_url || null });
+        } else {
+          mappedAtts.push({ ...att, download_url: data?.signedUrl || att.file_url || null });
+        }
+      } catch {
+        mappedAtts.push({ ...att, download_url: att.file_url || null });
+      }
+    }
+
+    out.push({ ...m, message_attachments: mappedAtts });
+  }
+
+  return out;
+};
+
 const normalizeId = (v) => {
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
@@ -250,6 +313,8 @@ router.get('/conversations/:conversationId/messages', authenticateToken, require
       return res.status(500).json({ message: 'Failed to fetch messages', error: error.message });
     }
 
+    const messagesWithUrls = await withAttachmentDownloadUrls(messages || []);
+
     return res.json({
       conversation: {
         conversationId: conversation.conversation_id,
@@ -257,7 +322,7 @@ router.get('/conversations/:conversationId/messages', authenticateToken, require
         stationBId: conversation.station_b_id,
         updatedAt: conversation.updated_at,
       },
-      messages: messages || [],
+      messages: messagesWithUrls,
     });
   } catch (e) {
     const status = e.statusCode || 500;
@@ -363,7 +428,7 @@ router.post('/messages/:messageId/attachments', authenticateToken, requireRoles(
     if (!messageId) return res.status(400).json({ message: 'Invalid messageId' });
     if (!req.files || req.files.length === 0) return res.status(400).json({ message: 'No files provided' });
 
-    const BUCKET = 'message-attachments';
+    const BUCKET = MESSAGE_ATTACHMENTS_BUCKET;
     const uploaded = [];
 
     for (const file of req.files) {

@@ -286,7 +286,7 @@ function ComposeWindow({ isOpen, onClose, onSend, stations, replyTo = null }) {
           });
         } else {
           // Reply to original sender
-          onSend(formData.body);
+          onSend({ body: formData.body, attachments });
         }
         // Reset form
         setRecipientStationId('');
@@ -736,14 +736,31 @@ export default function Reports() {
     setConfirmState({ open:false, id:null, type:null });
   };
   const openReply = (report) => setReplyModal({ open:true, to:report });
-  const sendReply = async (text) => {
+  const sendReply = async (payload) => {
     const conversationId = replyModal?.to?.conversationId || replyModal?.to?.id || null;
     if (!conversationId) {
       setReplyModal({ open:false, to:null });
       return;
     }
     try {
-      await apiClient.post(`/conversations/${conversationId}/messages`, { body: text, subject: null });
+      const body = typeof payload === 'string' ? payload : payload?.body;
+      const files = typeof payload === 'string' ? [] : payload?.attachments;
+
+      const res = await apiClient.post(`/conversations/${conversationId}/messages`, { body, subject: null });
+      const messageId = res?.messageId || null;
+
+      if (messageId && files && files.length > 0) {
+        const formData = new FormData();
+        files.forEach(att => formData.append('files', att.file ?? att, att.name ?? att.file?.name));
+        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+        const token = localStorage.getItem('authToken');
+        await fetch(`${apiUrl}/messages/${messageId}/attachments`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+          body: formData,
+        }).catch(err => console.error('Attachment upload failed:', err));
+      }
+
       setReplyModal({ open:false, to:null });
       await loadThread(conversationId);
       await loadConversations();
@@ -949,7 +966,7 @@ export default function Reports() {
                         {m.message_attachments.map(att => (
                           <a
                             key={att.attachment_id}
-                            href={att.file_url}
+                            href={att.download_url || att.file_url}
                             target="_blank"
                             rel="noopener noreferrer"
                             download={att.file_name}

@@ -138,7 +138,7 @@ export default function Signup() {
     setOtpLoading(true);
     setOtpMessage("");
     try {
-      await apiClient.post('/send-email-otp', { email: formData.email });
+      await apiClient.post('/send-otp', { email: formData.email });
       setOtpSent(true);
       setOtpMessage("OTP sent! Check your email inbox.");
     } catch (err) {
@@ -157,7 +157,7 @@ export default function Signup() {
     setOtpLoading(true);
     setOtpMessage("");
     try {
-      await apiClient.post('/verify-email-otp', { email: formData.email, otp: otpCode });
+      await apiClient.post('/verify-otp', { email: formData.email, otp: otpCode });
       setEmailVerified(true);
       setOtpMessage("Email verified successfully!");
     } catch (err) {

@@ -3,7 +3,7 @@ import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
 import { randomUUID, randomInt } from 'crypto';
 import twilio from 'twilio';
-import { supabase } from '../supabaseClient.js';
+import { supabase, supabaseAnon } from '../supabaseClient.js';
 import { authenticateToken } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -571,14 +571,67 @@ router.post('/send-otp', async (req, res) => {
     } else {
       // Email: let Supabase Auth handle both sending AND verification
       const normEmail = email.trim().toLowerCase();
-      const { error } = await supabase.auth.signInWithOtp({
+
+      if (!supabaseAnon) {
+        return res.status(500).json({
+          message: 'Supabase anon client not configured (missing SUPABASE_ANON_KEY).',
+        });
+      }
+
+      // Strategy:
+      // 1) Always send OTP with shouldCreateUser:false (avoids public signup restrictions).
+      // 2) If user does not exist yet, create it via Admin API (service role), then retry.
+      let { error } = await supabaseAnon.auth.signInWithOtp({
         email: normEmail,
-        options: { shouldCreateUser: true },
+        options: { shouldCreateUser: false },
       });
+
+      if (error) {
+        const errMsg = (error.message || '').toLowerCase();
+        const errCode = error.code;
+        const looksLikeUserNotFound =
+          errCode === 'user_not_found' ||
+          errMsg.includes('user not found') ||
+          errMsg.includes('no user') ||
+          errMsg.includes('not found');
+
+        if (looksLikeUserNotFound) {
+          if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+            return res.status(500).json({
+              message: 'Cannot create Auth user for email OTP (missing SUPABASE_SERVICE_ROLE_KEY).',
+            });
+          }
+
+          const { error: createErr } = await supabase.auth.admin.createUser({
+            email: normEmail,
+            email_confirm: false,
+          });
+
+          if (createErr) {
+            console.error('[POST /send-otp] Supabase admin createUser error:', createErr);
+            return res.status(500).json({ message: 'Failed to prepare email OTP', error: createErr.message });
+          }
+
+          ({ error } = await supabaseAnon.auth.signInWithOtp({
+            email: normEmail,
+            options: { shouldCreateUser: false },
+          }));
+        }
+      }
+
       if (error) {
         console.error('[POST /send-otp] Supabase email OTP error:', error);
+        const errCode = error.code;
+        const errMsg = String(error.message || '');
+        if (errCode === 'otp_disabled' || errMsg.toLowerCase().includes('signups not allowed for otp')) {
+          return res.status(400).json({
+            message: 'Supabase Email OTP is disabled for this project. Enable Email provider + allow signups in Supabase Auth settings, then try again.',
+            error: error.message,
+          });
+        }
         return res.status(500).json({ message: 'Failed to send email OTP', error: error.message });
       }
+
       console.log('[POST /send-otp] Email OTP sent to', normEmail);
       return res.json({ success: true, method: 'email', message: 'OTP sent to your email' });
     }
@@ -620,7 +673,14 @@ router.post('/verify-otp', async (req, res) => {
     } else {
       // Email: verify via Supabase Auth (it generated the code)
       const normEmail = email.trim().toLowerCase();
-      const { error } = await supabase.auth.verifyOtp({
+
+      if (!supabaseAnon) {
+        return res.status(500).json({
+          message: 'Supabase anon client not configured (missing SUPABASE_ANON_KEY).',
+        });
+      }
+
+      const { error } = await supabaseAnon.auth.verifyOtp({
         email: normEmail,
         token: otp.trim(),
         type: 'email',
@@ -662,54 +722,73 @@ router.post('/end-user-signup', async (req, res) => {
       return res.status(400).json({ message: 'Either phone number or email is required.' });
     }
 
-    // Build duplicate-check filter
-    const orFilters = [];
-    if (normPhone) {
-      orFilters.push(`phone_number.eq.${normPhone}`);
-      orFilters.push(`id_number.eq.CIV_${normPhone}`);
-    }
+    // Policy: Do NOT allow duplicate email/phone. Require a different email/phone for a new end-user account.
+    // NOTE: Avoid PostgREST `.or()` string parsing issues with emails containing dots/symbols.
     if (normEmail) {
-      orFilters.push(`email.eq.${normEmail}`);
-    }
-
-    // Check if phone/email already registered
-    if (orFilters.length > 0) {
-      const { data: existing } = await supabase
+      const { data } = await supabase
         .from('users')
         .select('user_id')
-        .or(orFilters.join(','))
+        .eq('email', normEmail)
         .maybeSingle();
+      if (data) {
+        return res.status(400).json({ message: 'Email already exists. Please use another email.' });
+      }
+    }
 
-      if (existing) {
-        return res.status(400).json({ message: 'An account with this phone number or email already exists. Please login.' });
+    if (normPhone) {
+      const { data } = await supabase
+        .from('users')
+        .select('user_id')
+        .eq('phone_number', normPhone)
+        .maybeSingle();
+      if (data) {
+        return res.status(400).json({ message: 'Phone number already exists. Please use another phone number.' });
       }
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
     const fullName = `${firstName} ${lastName}`.trim();
-    // id_number column is varchar(20) — phone-based fits, email needs truncation
-    const idNumber = normPhone
-      ? `CIV_${normPhone}`
-      : `CIV_${Date.now().toString(36)}`;
+    // id_number column is varchar(20). Keep it short and avoid collisions.
+    const buildEndUserIdNumber = () => {
+      if (normPhone) {
+        const compact = normPhone.replace(/\D/g, '');
+        return `CIV_${compact}`.slice(0, 20);
+      }
+      return `CIV_${randomUUID().replace(/-/g, '').slice(0, 12)}`.slice(0, 20);
+    };
 
-    const { error: insertErr } = await supabase
-      .from('users')
-      .insert([{
-        first_name: firstName,
-        last_name: lastName,
-        full_name: fullName,
-        phone_number: normPhone,       // null if not provided
-        password: hashedPassword,
-        role: 'end_user',
-        email: normEmail,              // null if not provided
-        id_number: idNumber,
-      }]);
+    let insertErr = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const idNumber = buildEndUserIdNumber();
+      const { error } = await supabase
+        .from('users')
+        .insert([{
+          first_name: firstName,
+          last_name: lastName,
+          full_name: fullName,
+          phone_number: normPhone,       // null if not provided
+          password: hashedPassword,
+          role: 'end_user',
+          email: normEmail,              // null if not provided
+          id_number: idNumber,
+        }]);
+
+      if (!error) {
+        insertErr = null;
+        break;
+      }
+
+      insertErr = error;
+      const msg = String(error.message || '');
+      const isIdNumberDup = msg.includes('users_id_number_key') || msg.includes('id_number') || error.code === '23505';
+      if (!isIdNumberDup) break;
+    }
 
     if (insertErr) {
       console.error('[POST /end-user-signup] insert error:', insertErr.message);
-      // Friendly message for duplicate constraint violations
+      // Duplicate constraint violations
       if (insertErr.message.includes('duplicate key') || insertErr.code === '23505') {
-        return res.status(400).json({ message: 'An account with this phone number or email already exists. Please login.' });
+        return res.status(400).json({ message: 'Email or phone number already exists. Please use another email/phone.' });
       }
       return res.status(500).json({ message: 'Registration failed.', error: insertErr.message });
     }

@@ -80,6 +80,15 @@ export default function OfficerLogInHistory() {
   const stationGroups = Object.values(groupedByStation).sort((a, b) => {
     const aName = a.station_name ?? "";
     const bName = b.station_name ?? "";
+    
+    // Put ZAMBOANGA CENTRAL FIRE STATION first
+    const aIsCentral = aName.toLowerCase().includes("zamboanga") && aName.toLowerCase().includes("central");
+    const bIsCentral = bName.toLowerCase().includes("zamboanga") && bName.toLowerCase().includes("central");
+    
+    if (aIsCentral && !bIsCentral) return -1;
+    if (!aIsCentral && bIsCentral) return 1;
+    
+    // Then sort alphabetically
     if (aName && bName) return aName.localeCompare(bName);
     if (aName) return -1;
     if (bName) return 1;
@@ -162,21 +171,22 @@ export default function OfficerLogInHistory() {
       </div>
 
       {/* TABLE */}
-      <div className="officer-table-card">
-        {loading ? (
+      {loading ? (
+        <div className="officer-table-card">
           <div>Loading...</div>
-        ) : (
-          <div>
-            {stationGroups.map((group) => (
-              <div key={group.station_id ?? "unassigned"} style={{ marginBottom: 24 }}>
-                <h3 style={{ margin: "0 0 12px" }}>
-                  {group.station_name || "Unassigned Station"}
-                  {group.station_name ? "" : group.station_id ? ` (Station ID: ${group.station_id})` : ""}
-                </h3>
+        </div>
+      ) : (
+        <div>
+          {stationGroups.map((group) => (
+            <div key={group.station_id ?? "unassigned"} className="station-container">
+              <div className="station-header-label">
+                {group.station_name || "UNASSIGNED STATION"}
+              </div>
 
-                <table>
+              <div className="station-table-container">
+                <table className="officer-table">
                   <thead>
-                    <tr>
+                    <tr className="table-header-row">
                       <th>Login Time</th>
                       <th>Logout Time</th>
                       <th>Name</th>
@@ -186,7 +196,7 @@ export default function OfficerLogInHistory() {
                   </thead>
                   <tbody>
                     {group.rows.map((officer) => (
-                      <tr key={officer.id}>
+                      <tr key={officer.id} className="table-data-row">
                         <td>{officer.login_time ? new Date(officer.login_time).toLocaleString() : "—"}</td>
                         <td>{officer.logout_time ? new Date(officer.logout_time).toLocaleString() : "—"}</td>
                         <td>{officer.users?.full_name || "—"}</td>
@@ -203,10 +213,10 @@ export default function OfficerLogInHistory() {
                   </tbody>
                 </table>
               </div>
-            ))}
-          </div>
-        )}
-      </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

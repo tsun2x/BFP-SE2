@@ -1,17 +1,99 @@
 /* Confirm Modal Component Styles
- * This file extends the base modal system for the ConfirmModal component
- * For standard modal styles, see modals.css
+ * Simple centered design with bottom-left buttons
  */
 
 @import './modals.css';
 
-/* ConfirmModal specific overrides */
-.modal-message {
-  /* ConfirmModal uses centered text */
+/* Modal Card/Container - Simple Design */
+.modal-card {
+  background: #fff;
+  width: 420px;
+  max-width: 95%;
+  padding: 40px 32px 32px;
+  border-radius: 12px;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+  animation: modalFadeIn 0.25s ease;
+  text-align: center;
+  border: 1px solid #e2e8f0;
+  position: relative;
+}
+
+/* Hide Icons for Simple Design */
+.modal-icon {
+  display: none;
+}
+
+/* Centered Bold Title */
+.modal-title {
+  font-size: 18px;
+  font-weight: 700;
+  margin: 0 0 24px 0;
+  color: #1e293b;
   text-align: center;
 }
 
+/* Modal Message - Details at bottom */
+.modal-message {
+  font-size: 14px;
+  line-height: 1.5;
+  color: #64748b;
+  margin: 0 0 32px 0;
+  text-align: center;
+}
+
+/* Modal Actions - Buttons on left side */
 .modal-actions {
-  /* ConfirmModal uses centered actions */
-  justify-content: center;
+  display: flex;
+  justify-content: flex-start;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+/* Simple Modal Buttons - No Icons */
+.modal-btn {
+  padding: 10px 20px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  min-width: 80px;
+}
+
+.modal-btn.cancel {
+  background: #f8fafc;
+  color: #64748b;
+  border: 1px solid #e2e8f0;
+}
+
+.modal-btn.cancel:hover {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.modal-btn.confirm {
+  background: #dc143c;
+  color: white;
+}
+
+.modal-btn.confirm:hover {
+  background: #b91c1c;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .modal-card {
+    width: 95%;
+    padding: 32px 24px 24px;
+  }
+  
+  .modal-actions {
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .modal-btn {
+    width: 100%;
+  }
 }

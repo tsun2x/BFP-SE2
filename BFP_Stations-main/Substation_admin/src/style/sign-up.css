@@ -44,7 +44,7 @@
 /* ===== Card ===== */
 .signup-card {
   width: 100%;
-  max-width: 840px;
+  max-width: 1000px;
   background: #fff;
   border-radius: 12px;
   padding: 60px 70px;
@@ -86,8 +86,25 @@
   margin-bottom: 25px;
 }
 
+.auth-row.three-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 20px;
+}
+
+.auth-row.two-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 30px;
+}
+
+.auth-row.single-column {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
 .auth-group {
-  flex: 1;
   display: flex;
   flex-direction: column;
 }
@@ -231,7 +248,7 @@
 
 /* ===== OTP Button ===== */
 .otp-btn {
-  padding: 10px 20px;
+  padding: 14px 20px;
   border-radius: 8px;
   border: 1px solid #b11217;
   background: linear-gradient(135deg, #8b0000, #c1121f);
@@ -243,6 +260,10 @@
   white-space: nowrap;
   height: fit-content;
   align-self: flex-end;
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .otp-btn:hover {

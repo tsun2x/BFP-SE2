@@ -65,10 +65,10 @@
 }
 
 .idp-close:hover {
-  background: #ff5a24;
+  background: #8B0000;
   color: white;
   transform: rotate(90deg);
-  box-shadow: 0 4px 12px rgba(255, 90, 36, 0.3);
+  box-shadow: 0 4px 12px rgba(139, 0, 0, 0.3);
 }
 .idp-header h2 {
   flex: 1;

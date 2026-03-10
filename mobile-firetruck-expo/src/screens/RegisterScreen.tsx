@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
 
 type Props = {
@@ -14,6 +15,8 @@ const RegisterScreen: React.FC<Props> = ({ onGoToLogin }) => {
   const [rank, setRank] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleRegister = async () => {
@@ -58,10 +61,42 @@ const RegisterScreen: React.FC<Props> = ({ onGoToLogin }) => {
             <TextInput style={styles.input} placeholder="e.g. FO1, SFO1, FINSP" value={rank} onChangeText={setRank} />
 
             <Text style={styles.label}>Password</Text>
-            <TextInput style={styles.input} placeholder="Min 6 characters" secureTextEntry value={password} onChangeText={setPassword} />
+            <View style={styles.passwordContainer}>
+              <TextInput
+                style={styles.passwordInput}
+                placeholder="Min 6 characters"
+                secureTextEntry={!showPassword}
+                value={password}
+                onChangeText={setPassword}
+              />
+              <TouchableOpacity
+                onPress={() => setShowPassword((current) => !current)}
+                style={styles.passwordToggle}
+                accessibilityRole="button"
+                accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
+              >
+                <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={20} color="#666" />
+              </TouchableOpacity>
+            </View>
 
             <Text style={styles.label}>Confirm Password</Text>
-            <TextInput style={styles.input} placeholder="Re-enter password" secureTextEntry value={confirmPassword} onChangeText={setConfirmPassword} />
+            <View style={styles.passwordContainer}>
+              <TextInput
+                style={styles.passwordInput}
+                placeholder="Re-enter password"
+                secureTextEntry={!showConfirmPassword}
+                value={confirmPassword}
+                onChangeText={setConfirmPassword}
+              />
+              <TouchableOpacity
+                onPress={() => setShowConfirmPassword((current) => !current)}
+                style={styles.passwordToggle}
+                accessibilityRole="button"
+                accessibilityLabel={showConfirmPassword ? 'Hide confirm password' : 'Show confirm password'}
+              >
+                <Ionicons name={showConfirmPassword ? 'eye-off-outline' : 'eye-outline'} size={20} color="#666" />
+              </TouchableOpacity>
+            </View>
 
             {error ? <Text style={styles.error}>{error}</Text> : null}
 
@@ -91,6 +126,9 @@ const styles = StyleSheet.create({
   form: { marginTop: 8 },
   label: { fontSize: 14, fontWeight: '600', marginBottom: 6, color: '#333' },
   input: { borderWidth: 1, borderColor: '#ddd', borderRadius: 6, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 14, fontSize: 14 },
+  passwordContainer: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: '#ddd', borderRadius: 6, paddingLeft: 12, paddingRight: 10, marginBottom: 14 },
+  passwordInput: { flex: 1, paddingVertical: 10, fontSize: 14 },
+  passwordToggle: { paddingLeft: 8, paddingVertical: 6 },
   button: { backgroundColor: '#B71C1C', paddingVertical: 12, borderRadius: 6, alignItems: 'center', marginTop: 8 },
   buttonDisabled: { opacity: 0.7 },
   buttonText: { color: '#fff', fontSize: 16, fontWeight: '600' },

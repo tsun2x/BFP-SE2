@@ -17,6 +17,7 @@ import { useAuth } from '../../context/AuthContext';
 export const LoginScreen = ({ navigation }) => {
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const { login } = useAuth();
 
   const handleSignIn = async () => {
@@ -90,10 +91,18 @@ export const LoginScreen = ({ navigation }) => {
                   style={styles.input}
                   placeholder="Enter your password"
                   placeholderTextColor="#999"
-                  secureTextEntry
+                  secureTextEntry={!showPassword}
                   value={password}
                   onChangeText={setPassword}
                 />
+                <TouchableOpacity
+                  onPress={() => setShowPassword((current) => !current)}
+                  style={styles.passwordToggle}
+                  accessibilityRole="button"
+                  accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={20} color="#666" />
+                </TouchableOpacity>
               </View>
             </View>
 
@@ -208,6 +217,10 @@ const styles = StyleSheet.create({
     marginLeft: 10,
     fontSize: 14,
     color: "#333",
+  },
+  passwordToggle: {
+    marginLeft: 10,
+    paddingVertical: 4,
   },
 
   forgotPasswordBtn: {

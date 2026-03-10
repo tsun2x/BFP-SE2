@@ -51,6 +51,8 @@ export default function Signup() {
   const [signupError, setSignupError] = useState("");
 
   const [passwordStrength, setPasswordStrength] = useState(0);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
 
 
@@ -612,7 +614,27 @@ export default function Signup() {
 
                 <label>Password</label>
 
-                <input type="password" name="password" value={formData.password} onChange={handleInputChange} className={errors.password ? "error" : ""} />
+                <div className="password-field">
+
+                  <input type={showPassword ? "text" : "password"} name="password" value={formData.password} onChange={handleInputChange} className={errors.password ? "error" : ""} />
+
+                  <button
+
+                    type="button"
+
+                    className="password-toggle"
+
+                    onClick={() => setShowPassword((current) => !current)}
+
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+
+                  >
+
+                    {showPassword ? "Hide" : "Show"}
+
+                  </button>
+
+                </div>
 
                 {formData.password && (
 
@@ -640,7 +662,27 @@ export default function Signup() {
 
                 <label>Confirm Password</label>
 
-                <input type="password" name="confirmPassword" value={formData.confirmPassword} onChange={handleInputChange} className={errors.confirmPassword ? "error" : ""} />
+                <div className="password-field">
+
+                  <input type={showConfirmPassword ? "text" : "password"} name="confirmPassword" value={formData.confirmPassword} onChange={handleInputChange} className={errors.confirmPassword ? "error" : ""} />
+
+                  <button
+
+                    type="button"
+
+                    className="password-toggle"
+
+                    onClick={() => setShowConfirmPassword((current) => !current)}
+
+                    aria-label={showConfirmPassword ? "Hide confirm password" : "Show confirm password"}
+
+                  >
+
+                    {showConfirmPassword ? "Hide" : "Show"}
+
+                  </button>
+
+                </div>
 
                 {errors.confirmPassword && <span className="error-message">{errors.confirmPassword}</span>}
 
@@ -652,7 +694,7 @@ export default function Signup() {
 
             <div className="signup-buttons">
 
-              <button type="button" className="reset-btn" onClick={() => { setFormData({ userType: "Substation", firstName: "", lastName: "", middleName: "", email: "", idNumber: "", rank: "", password: "", confirmPassword: "", assignedStationId: "" }); setOtpSent(false); setOtpCode(""); setEmailVerified(false); setOtpMessage(""); setErrors({}); setSignupError(""); }}>
+              <button type="button" className="reset-btn" onClick={() => { setFormData({ userType: "Substation", firstName: "", lastName: "", middleName: "", email: "", idNumber: "", rank: "", password: "", confirmPassword: "", assignedStationId: "" }); setOtpSent(false); setOtpCode(""); setEmailVerified(false); setOtpMessage(""); setErrors({}); setSignupError(""); setShowPassword(false); setShowConfirmPassword(false); }}>
 
                 Reset
 

@@ -20,6 +20,8 @@ import { NODE_API_URL } from '../../config';
 
 export const RegisterScreen = ({ navigation }) => {
   const [signUpMethod, setSignUpMethod] = useState<'phone' | 'email'>('phone');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [form, setForm] = useState({
     lastName: '',
     firstName: '',
@@ -344,10 +346,18 @@ export const RegisterScreen = ({ navigation }) => {
                           style={styles.input}
                           placeholder="Enter password"
                           placeholderTextColor="#999"
-                          secureTextEntry
+                          secureTextEntry={!showPassword}
                           value={form.password}
                           onChangeText={(t) => handleChange('password', t)}
                         />
+                        <TouchableOpacity
+                          onPress={() => setShowPassword((current) => !current)}
+                          style={styles.passwordToggle}
+                          accessibilityRole="button"
+                          accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
+                        >
+                          <Ionicons name={showPassword ? 'eye-off-outline' : 'eye-outline'} size={20} color="#666" />
+                        </TouchableOpacity>
                       </View>
                     </View>
 
@@ -360,10 +370,18 @@ export const RegisterScreen = ({ navigation }) => {
                           style={styles.input}
                           placeholder="Confirm password"
                           placeholderTextColor="#999"
-                          secureTextEntry
+                          secureTextEntry={!showConfirmPassword}
                           value={form.confirmPassword}
                           onChangeText={(t) => handleChange('confirmPassword', t)}
                         />
+                        <TouchableOpacity
+                          onPress={() => setShowConfirmPassword((current) => !current)}
+                          style={styles.passwordToggle}
+                          accessibilityRole="button"
+                          accessibilityLabel={showConfirmPassword ? 'Hide confirm password' : 'Show confirm password'}
+                        >
+                          <Ionicons name={showConfirmPassword ? 'eye-off-outline' : 'eye-outline'} size={20} color="#666" />
+                        </TouchableOpacity>
                       </View>
                     </View>
 
@@ -516,6 +534,10 @@ const styles = StyleSheet.create({
     marginLeft: 10,
     fontSize: 14,
     color: '#333',
+  },
+  passwordToggle: {
+    marginLeft: 10,
+    paddingVertical: 4,
   },
 
   // Button

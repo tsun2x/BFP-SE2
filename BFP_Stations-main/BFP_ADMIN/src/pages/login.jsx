@@ -15,6 +15,7 @@ export default function AdminLogin() {
   const [errors, setErrors] = useState({});
   const [isLoading, setIsLoading] = useState(false);
   const [loginError, setLoginError] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
 
   // Form validation
   const validateForm = () => {
@@ -130,14 +131,24 @@ export default function AdminLogin() {
 
               <div className="admin-group">
                 <label>Password</label>
-                <input
-                  type="password"
-                  name="password"
-                  value={formData.password}
-                  onChange={handleInputChange}
-                  placeholder="Enter password"
-                  className={errors.password ? "input-error" : ""}
-                />
+                <div className="password-field">
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    name="password"
+                    value={formData.password}
+                    onChange={handleInputChange}
+                    placeholder="Enter password"
+                    className={errors.password ? "input-error" : ""}
+                  />
+                  <button
+                    type="button"
+                    className="password-toggle"
+                    onClick={() => setShowPassword((current) => !current)}
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                  >
+                    {showPassword ? "Hide" : "Show"}
+                  </button>
+                </div>
              
               </div>
 

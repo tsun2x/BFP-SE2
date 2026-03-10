@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import '../style/reports.css';
 import ConfirmModal from '../components/ConfirmModal';
+import Toast from '../components/Toast';
 import apiClient from '../utils/apiClient';
 
 const sampleReports = [
@@ -576,8 +577,23 @@ export default function Reports() {
   const [stations, setStations] = useState([]);
   const [threadMessages, setThreadMessages] = useState([]);
   const [showMoreDropdown, setShowMoreDropdown] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
+  const [toastType, setToastType] = useState('success');
 
   const selected = reports.find(r => r.id === selectedId) || null;
+  const currentUser = (() => {
+    try {
+      return JSON.parse(localStorage.getItem('user') || 'null');
+    } catch (e) {
+      return null;
+    }
+  })();
+  const myStationId = currentUser?.assignedStationId || currentUser?.assigned_station_id || currentUser?.stationInfo?.station_id || null;
+
+  const isOutgoingMessage = (message) => {
+    if (!message || !myStationId) return false;
+    return String(message.sender_station_id) === String(myStationId);
+  };
 
   const formatDate = (isoOrDateString) => {
     if (!isoOrDateString) return '';
@@ -604,6 +620,7 @@ export default function Reports() {
           full: last?.body || '',
           email: '',
           read: last ? Boolean(last.is_read) : true,
+          sentByMe: last ? String(last.sender_station_id) === String(myStationId) : false,
           type: 'message', // Regular message type
         };
       });
@@ -622,6 +639,7 @@ export default function Reports() {
           full: report.message || '',
           email: report.driverEmail || '',
           read: Boolean(report.is_read),
+          sentByMe: false,
           type: 'fire-truck-report', // Fire truck driver report type
           reportType: report.reportType || 'status',
           location: report.location || '',
@@ -642,6 +660,7 @@ export default function Reports() {
           full: '2-story residential building fully involved, fire spreading to adjacent structure. Need additional engine company and ladder truck immediately. Multiple families may be trapped. Location: Main Street & Oak Avenue. Coordinates: 14.6092, 120.9842. Requesting mutual aid from neighboring stations.',
           email: 'john.martinez@firedept.gov',
           read: false,
+          sentByMe: false,
           type: 'fire-truck-report',
           reportType: 'need-backup',
           location: 'Main Street & Oak Avenue, District 5',
@@ -764,8 +783,13 @@ export default function Reports() {
       setReplyModal({ open:false, to:null });
       await loadThread(conversationId);
       await loadConversations();
+      setSelectedId(conversationId);
+      setToastType('success');
+      setToastMessage('Reply sent successfully.');
     } catch (e) {
       setReplyModal({ open:false, to:null });
+      setToastType('error');
+      setToastMessage('Failed to send reply.');
     }
   };
 
@@ -818,8 +842,16 @@ export default function Reports() {
 
       setComposeModal({ open: false });
       await loadConversations();
+      if (res?.conversationId) {
+        setSelectedId(res.conversationId);
+        await loadThread(res.conversationId);
+      }
+      setToastType('success');
+      setToastMessage('Message sent successfully.');
     } catch (e) {
       console.error('Failed to send message:', e);
+      setToastType('error');
+      setToastMessage('Failed to send message.');
     }
   };
 
@@ -903,7 +935,10 @@ export default function Reports() {
                       <div className="item-name">{r.name}</div>
                       <div className="item-date">{formatDate(r.date)}</div>
                     </div>
-                    <div className="item-subject">{r.subject}</div>
+                    <div className="item-subject-row">
+                      <div className="item-subject">{r.subject}</div>
+                      {r.sentByMe && <span className="message-direction-badge sent">Sent</span>}
+                    </div>
                     <div className="item-preview">{r.preview}</div>
                   </div>
                 </div>
@@ -939,6 +974,11 @@ export default function Reports() {
                 <div className="sender-meta">
                   <div className="sender-name">{selected.name}</div>
                   <div className="sender-email">{formatDate(selected.date)}</div>
+                  {selected.sentByMe && (
+                    <div className="message-status-summary">
+                      <span className="message-direction-badge sent">You sent the latest message</span>
+                    </div>
+                  )}
                   {selected.type === 'fire-truck-report' && selected.location && (
                     <div className="sender-location">
                       <i className="fa-solid fa-location-dot"></i> {selected.location}
@@ -952,8 +992,17 @@ export default function Reports() {
                   ? threadMessages
                   : [{ message_id: 'fallback', body: selected.full, sent_at: selected.date }]
                 ).map((m) => (
-                  <div key={m.message_id} style={{ marginBottom: '12px' }}>
-                    <p style={{ margin: 0 }}>
+                  <div
+                    key={m.message_id}
+                    className={`thread-message ${isOutgoingMessage(m) ? 'outgoing' : 'incoming'}`}
+                  >
+                    <div className="thread-message-meta">
+                      <span className={`message-direction-badge ${isOutgoingMessage(m) ? 'sent' : 'received'}`}>
+                        {isOutgoingMessage(m) ? 'You sent this' : 'Received'}
+                      </span>
+                      <span className="thread-message-time">{formatDate(m.sent_at)}</span>
+                    </div>
+                    <p className="thread-message-body">
                       {String(m.body || '').split('\n').map((para, idx) => (
                         <span key={idx}>
                           {para}
@@ -962,7 +1011,7 @@ export default function Reports() {
                       ))}
                     </p>
                     {m.message_attachments && m.message_attachments.length > 0 && (
-                      <div style={{ marginTop: '8px', display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                      <div className="thread-attachments">
                         {m.message_attachments.map(att => (
                           <a
                             key={att.attachment_id}
@@ -970,12 +1019,7 @@ export default function Reports() {
                             target="_blank"
                             rel="noopener noreferrer"
                             download={att.file_name}
-                            style={{
-                              display: 'inline-flex', alignItems: 'center', gap: '6px',
-                              padding: '4px 10px', borderRadius: '6px', fontSize: '13px',
-                              background: '#f3f4f6', border: '1px solid #d1d5db',
-                              color: '#1f2937', textDecoration: 'none',
-                            }}
+                            className="thread-attachment-link"
                           >
                             📎 {att.file_name}
                           </a>
@@ -1018,6 +1062,14 @@ export default function Reports() {
         stations={stations}
         replyTo={replyModal.to}
       />
+
+      {toastMessage && (
+        <Toast
+          message={toastMessage}
+          type={toastType}
+          onClose={() => setToastMessage('')}
+        />
+      )}
       
       {/* Empty State */}
       {filteredReports.length === 0 && (

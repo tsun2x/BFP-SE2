@@ -197,6 +197,34 @@
   outline: none;
 }
 
+.login-page .password-field {
+  position: relative;
+}
+
+.login-page .password-field input {
+  width: 100%;
+  padding-right: 78px;
+}
+
+.login-page .password-toggle {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  transform: translateY(-50%);
+  border: none;
+  background: transparent;
+  color: #b11217;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.login-page .password-toggle:focus-visible {
+  outline: 2px solid rgba(177,18,23,0.35);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
 /* Error state */
 .login-page .input-error {
   border-color: #b11217 !important;

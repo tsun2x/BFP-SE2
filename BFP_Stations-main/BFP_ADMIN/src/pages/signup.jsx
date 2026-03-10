@@ -59,6 +59,8 @@ export default function Signup() {
   const [otpCode, setOtpCode] = useState("");
 
   const [emailVerified, setEmailVerified] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const [otpLoading, setOtpLoading] = useState(false);
 
@@ -84,13 +86,9 @@ export default function Signup() {
 
   };
 
-
-
   const validateForm = () => {
 
     const newErrors = {};
-
-    
 
     if (!formData.firstName.trim()) {
 
@@ -102,8 +100,6 @@ export default function Signup() {
 
     }
 
-    
-
     if (!formData.lastName.trim()) {
 
       newErrors.lastName = "Last name is required";
@@ -113,8 +109,6 @@ export default function Signup() {
       newErrors.lastName = "Last name must be at least 2 characters";
 
     }
-
-    
 
     if (!formData.idNumber.trim()) {
 
@@ -126,15 +120,11 @@ export default function Signup() {
 
     }
 
-    
-
     if (!formData.rank.trim()) {
 
       newErrors.rank = "Rank is required";
 
     }
-
-    
 
     if (!formData.password) {
 
@@ -150,8 +140,6 @@ export default function Signup() {
 
     }
 
-    
-
     if (!formData.confirmPassword) {
 
       newErrors.confirmPassword = "Please confirm your password";
@@ -162,19 +150,11 @@ export default function Signup() {
 
     }
 
-    
-
-    // ensure assigned station selected for Main admin
-
     if (!formData.assignedStationId) {
 
       newErrors.assignedStationId = 'Please select assigned station';
 
     }
-
-
-
-    // Require email verification
 
     if (!formData.email.trim()) {
 
@@ -185,8 +165,6 @@ export default function Signup() {
       newErrors.email = "Please verify your email with OTP";
 
     }
-
-    
 
     return newErrors;
 
@@ -846,21 +824,41 @@ export default function Signup() {
 
                 <label>Password</label>
 
-                <input 
+                <div className="password-field">
 
-                  type="password"
+                  <input 
 
-                  name="password"
+                    type={showPassword ? "text" : "password"}
 
-                  value={formData.password}
+                    name="password"
 
-                  onChange={handleInputChange}
+                    value={formData.password}
 
-                  required 
+                    onChange={handleInputChange}
 
-                  className={errors.password ? "error" : ""}
+                    required 
 
-                />
+                    className={errors.password ? "error" : ""}
+
+                  />
+
+                  <button
+
+                    type="button"
+
+                    className="password-toggle"
+
+                    onClick={() => setShowPassword((current) => !current)}
+
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+
+                  >
+
+                    {showPassword ? "Hide" : "Show"}
+
+                  </button>
+
+                </div>
 
                 {formData.password && (
 
@@ -908,21 +906,41 @@ export default function Signup() {
 
                 <label>Confirm Password</label>
 
-                <input 
+                <div className="password-field">
 
-                  type="password"
+                  <input 
 
-                  name="confirmPassword"
+                    type={showConfirmPassword ? "text" : "password"}
 
-                  value={formData.confirmPassword}
+                    name="confirmPassword"
 
-                  onChange={handleInputChange}
+                    value={formData.confirmPassword}
 
-                  required 
+                    onChange={handleInputChange}
 
-                  className={errors.confirmPassword ? "error" : ""}
+                    required 
 
-                />
+                    className={errors.confirmPassword ? "error" : ""}
+
+                  />
+
+                  <button
+
+                    type="button"
+
+                    className="password-toggle"
+
+                    onClick={() => setShowConfirmPassword((current) => !current)}
+
+                    aria-label={showConfirmPassword ? "Hide confirm password" : "Show confirm password"}
+
+                  >
+
+                    {showConfirmPassword ? "Hide" : "Show"}
+
+                  </button>
+
+                </div>
 
                 {errors.confirmPassword && (
 
@@ -975,6 +993,10 @@ export default function Signup() {
                 setEmailVerified(false);
 
                 setOtpMessage("");
+
+                setShowPassword(false);
+
+                setShowConfirmPassword(false);
 
               }}>
 

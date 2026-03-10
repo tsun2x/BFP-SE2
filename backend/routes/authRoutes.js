@@ -579,11 +579,10 @@ router.post('/send-otp', async (req, res) => {
       }
 
       // Strategy:
-      // 1) Always send OTP with shouldCreateUser:false (avoids public signup restrictions).
-      // 2) If user does not exist yet, create it via Admin API (service role), then retry.
+      // 1) Send OTP through the anon client so Supabase handles the passwordless flow.
+      // 2) If Supabase reports the user does not exist, create it via Admin API, then retry.
       let { error } = await supabaseAnon.auth.signInWithOtp({
         email: normEmail,
-        options: { shouldCreateUser: false },
       });
 
       if (error) {
@@ -614,7 +613,6 @@ router.post('/send-otp', async (req, res) => {
 
           ({ error } = await supabaseAnon.auth.signInWithOtp({
             email: normEmail,
-            options: { shouldCreateUser: false },
           }));
         }
       }

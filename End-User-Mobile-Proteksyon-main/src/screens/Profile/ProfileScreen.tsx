@@ -15,6 +15,9 @@ import { useNavigation } from '@react-navigation/native';
 export const ProfileScreen: React.FC = () => {
   const navigation = useNavigation<any>();
   const [isEditing, setIsEditing] = useState(false);
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [formData, setFormData] = useState({
     firstName: 'Juan',
     lastName: 'Dela Cruz',
@@ -42,6 +45,9 @@ export const ProfileScreen: React.FC = () => {
       }
       
       Alert.alert('Success', 'Profile updated successfully!');
+      setShowCurrentPassword(false);
+      setShowNewPassword(false);
+      setShowConfirmPassword(false);
       setIsEditing(false);
     } else {
       setIsEditing(true);
@@ -50,6 +56,9 @@ export const ProfileScreen: React.FC = () => {
 
   const handleCancel = () => {
     setIsEditing(false);
+    setShowCurrentPassword(false);
+    setShowNewPassword(false);
+    setShowConfirmPassword(false);
     // Reset form data to original values
     setFormData({
       firstName: 'Juan',
@@ -187,35 +196,65 @@ export const ProfileScreen: React.FC = () => {
             
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Current Password</Text>
-              <TextInput
-                style={styles.input}
-                value={formData.password}
-                onChangeText={(text) => handleInputChange('password', text)}
-                placeholder="Enter current password"
-                secureTextEntry
-              />
+              <View style={styles.passwordContainer}>
+                <TextInput
+                  style={styles.passwordInput}
+                  value={formData.password}
+                  onChangeText={(text) => handleInputChange('password', text)}
+                  placeholder="Enter current password"
+                  secureTextEntry={!showCurrentPassword}
+                />
+                <TouchableOpacity
+                  onPress={() => setShowCurrentPassword((current) => !current)}
+                  style={styles.passwordToggle}
+                  accessibilityRole="button"
+                  accessibilityLabel={showCurrentPassword ? 'Hide current password' : 'Show current password'}
+                >
+                  <Ionicons name={showCurrentPassword ? 'eye-off-outline' : 'eye-outline'} size={20} color="#666" />
+                </TouchableOpacity>
+              </View>
             </View>
 
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>New Password</Text>
-              <TextInput
-                style={styles.input}
-                value={formData.newPassword}
-                onChangeText={(text) => handleInputChange('newPassword', text)}
-                placeholder="Enter new password"
-                secureTextEntry
-              />
+              <View style={styles.passwordContainer}>
+                <TextInput
+                  style={styles.passwordInput}
+                  value={formData.newPassword}
+                  onChangeText={(text) => handleInputChange('newPassword', text)}
+                  placeholder="Enter new password"
+                  secureTextEntry={!showNewPassword}
+                />
+                <TouchableOpacity
+                  onPress={() => setShowNewPassword((current) => !current)}
+                  style={styles.passwordToggle}
+                  accessibilityRole="button"
+                  accessibilityLabel={showNewPassword ? 'Hide new password' : 'Show new password'}
+                >
+                  <Ionicons name={showNewPassword ? 'eye-off-outline' : 'eye-outline'} size={20} color="#666" />
+                </TouchableOpacity>
+              </View>
             </View>
 
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Confirm New Password</Text>
-              <TextInput
-                style={styles.input}
-                value={formData.confirmPassword}
-                onChangeText={(text) => handleInputChange('confirmPassword', text)}
-                placeholder="Confirm new password"
-                secureTextEntry
-              />
+              <View style={styles.passwordContainer}>
+                <TextInput
+                  style={styles.passwordInput}
+                  value={formData.confirmPassword}
+                  onChangeText={(text) => handleInputChange('confirmPassword', text)}
+                  placeholder="Confirm new password"
+                  secureTextEntry={!showConfirmPassword}
+                />
+                <TouchableOpacity
+                  onPress={() => setShowConfirmPassword((current) => !current)}
+                  style={styles.passwordToggle}
+                  accessibilityRole="button"
+                  accessibilityLabel={showConfirmPassword ? 'Hide confirm new password' : 'Show confirm new password'}
+                >
+                  <Ionicons name={showConfirmPassword ? 'eye-off-outline' : 'eye-outline'} size={20} color="#666" />
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
         )}
@@ -373,6 +412,26 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#333',
     backgroundColor: '#fff',
+  },
+  passwordContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    paddingLeft: 16,
+    paddingRight: 12,
+    backgroundColor: '#fff',
+  },
+  passwordInput: {
+    flex: 1,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: '#333',
+  },
+  passwordToggle: {
+    paddingLeft: 12,
+    paddingVertical: 4,
   },
   inputDisabled: {
     backgroundColor: '#f9f9f9',

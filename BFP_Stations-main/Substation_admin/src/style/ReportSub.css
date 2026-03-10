@@ -249,12 +249,36 @@
 .item-top { display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom: 4px; }
 .item-name { font-weight:600; font-size:15px; color: #1e293b; }
 .item-date { color:var(--muted); font-size:13px; }
+.item-subject-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 6px;
+}
 .item-subject { 
   font-size:14px; 
   color: #334155; 
-  margin-bottom: 6px; 
   font-weight:500;
   line-height: 1.4;
+}
+.message-direction-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+.message-direction-badge.sent {
+  background: #dcfce7;
+  color: #166534;
+}
+.message-direction-badge.received {
+  background: #e2e8f0;
+  color: #334155;
 }
 .item-preview { 
   color:var(--muted); 
@@ -279,6 +303,9 @@
   height: 100%;
   display: flex;
   flex-direction: column;
+}
+.message-status-summary {
+  margin-top: 8px;
 }
 
 /* --- Compose window & Modal styles from main reports.css (overrides) --- */
@@ -402,6 +429,56 @@
 .message-controls { 
   display:flex; 
   gap:12px; 
+}
+.thread-message {
+  margin-bottom: 14px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+}
+.thread-message.outgoing {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+}
+.thread-message.incoming {
+  background: #f8fafc;
+}
+.thread-message-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.thread-message-time {
+  font-size: 12px;
+  color: var(--muted);
+}
+.thread-message-body {
+  margin: 0;
+  color: #1f2937;
+  line-height: 1.65;
+}
+.thread-attachments {
+  margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.thread-attachment-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 13px;
+  background: #f3f4f6;
+  border: 1px solid #d1d5db;
+  color: #1f2937;
+  text-decoration: none;
+}
+.thread-attachment-link:hover {
+  background: #e5e7eb;
 }
 .small-link { 
   background: transparent; 

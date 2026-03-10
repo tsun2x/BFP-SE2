@@ -1,0 +1,65 @@
+{
+  "expo": {
+    "android": {
+      "googleServicesFile": "./google-services.json",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/proteksyon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false,
+      "package": "com.tsun2x.mobilecivilianexpoclean",
+      "permissions": [
+        "INTERNET",
+        "CAMERA",
+        "RECORD_AUDIO",
+        "MODIFY_AUDIO_SETTINGS",
+        "BLUETOOTH",
+        "BLUETOOTH_CONNECT"
+      ]
+    },
+    "name": "mobile-civilian-expo-clean",
+    "slug": "mobile-civilian-expo-clean",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/proteksyon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": false,
+    "splash": {
+      "image": "./assets/MainLogo.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true
+    },
+    "web": {
+      "favicon": "./assets/MainLogo.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "6b1697b2-c94c-4b7b-a742-c87b4e7f2859"
+      }
+    },
+    "owner": "tsun2x",
+    "plugins": [
+      "./plugins/withTwilioVoice",
+      "@react-native-firebase/app",
+      "@react-native-firebase/messaging",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "gradleProperties": {
+              "systemProp.http.connectionTimeout": "300000",
+              "systemProp.http.readTimeout": "300000",
+              "systemProp.https.connectionTimeout": "300000",
+              "systemProp.https.readTimeout": "300000"
+            }
+          }
+        }
+      ],
+      "expo-font"
+    ]
+  }
+}

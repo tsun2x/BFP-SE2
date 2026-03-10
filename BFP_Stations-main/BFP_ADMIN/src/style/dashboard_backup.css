@@ -1,0 +1,324 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
+
+.dashboard-page {
+  padding: 25px 40px;
+  font-family: 'Poppins', sans-serif;
+  color: #232323;
+}
+
+/* ============================
+   HEADER
+============================ */
+.dashboard-header h1 {
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  color: #222;
+}
+
+.dashboard-header p {
+  margin-top: 4px;
+  color: #555;
+  font-size: 14px;
+}
+
+/* ============================
+   TOP STATS GRID
+============================ */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 22px;
+  margin-top: 25px;
+}
+
+.stat-card {
+  background: #ffffff;
+  padding: 20px 22px;
+  border-radius: 18px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  backdrop-filter: saturate(180%) blur(4px);
+
+  box-shadow: 0px 3px 10px rgba(0,0,0,0.05);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+}
+
+.stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transition: left 0.5s;
+}
+
+.stat-card:hover::before {
+  left: 100%;
+}
+
+/* Hover Lift */
+.stat-card:hover {
+  transform: translateY(-5px) scale(1.02);
+  box-shadow: 0px 8px 25px rgba(0,0,0,0.12);
+}
+
+.stat-icon {
+  transition: all 0.3s ease;
+}
+
+.stat-card:hover .stat-icon {
+  transform: rotate(10deg) scale(1.1);
+}
+
+/* TEXTS */
+.stat-left h2 {
+  font-size: 28px;
+  font-weight: 700;
+  margin-bottom: 3px;
+  color: #111;
+}
+
+.stat-left p {
+  font-size: 13px;
+  color: #555;
+  margin: 0;
+}
+
+.stat-left span {
+  font-size: 12px;
+  color: #888;
+  margin-top: 4px;
+  display: block;
+}
+
+/* ICON */
+.stat-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #ff8a40, #ff5a24);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  color: white;
+  font-size: 22px;
+  box-shadow: 0px 3px 8px rgba(255, 98, 0, 0.25);
+}
+
+/* ============================
+   MAIN CONTENT GRID
+============================ */
+.main-content-grid {
+  margin-top: 32px;
+  display: grid;
+  grid-template-columns: 2.1fr 1fr;
+  gap: 25px;
+}
+
+/* ============================
+   LEFT ANALYTICS
+============================ */
+.left-analytics .chart-card {
+  background: #ffffff;
+  padding: 20px 22px;
+  border-radius: 18px;
+  margin-bottom: 20px;
+
+  /* 🔥 PREMIUM BORDER */
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  backdrop-filter: saturate(180%) blur(4px);
+
+  box-shadow: 0px 3px 10px rgba(0,0,0,0.05);
+  transition: 0.15s;
+}
+
+.chart-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0px 6px 18px rgba(0,0,0,0.07);
+}
+
+.chart-card h3 {
+  font-size: 17px;
+  font-weight: 600;
+  margin-bottom: 14px;
+  color: #222;
+}
+
+.chart-placeholder {
+  height: 220px;
+  border: 2px dashed #ddd;
+  border-radius: 15px;
+  background: #fafafa;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  color: #a7a7a7;
+  font-size: 14px;
+}
+
+/* ============================
+   RIGHT — RECENT CALLS PANEL
+============================ */
+.recent-calls-card {
+  background: #ffffff;
+  padding: 22px 24px;
+  border-radius: 18px;
+
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  backdrop-filter: saturate(180%) blur(4px);
+
+  box-shadow: 0px 3px 10px rgba(0,0,0,0.05);
+  height: fit-content;
+}
+
+/* Header Row */
+.recent-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.search-input {
+  padding: 8px 14px;
+  border-radius: 10px;
+  border: 1px solid #ddd;
+  background: #fafafa;
+  outline: none;
+  font-size: 13px;
+  width: 160px;
+  transition: all 0.3s ease;
+}
+
+.search-input:focus {
+  border-color: #ff6a2e;
+  box-shadow: 0 0 0 3px rgba(255, 106, 46, 0.1);
+  width: 180px;
+  background: #fff;
+}
+
+.search-input::placeholder {
+  color: #999;
+  transition: opacity 0.3s ease;
+}
+
+.search-input:focus::placeholder {
+  opacity: 0.5;
+}
+
+/* Call item */
+.call-item {
+  margin-top: 18px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #efefef;
+  display: flex;
+  justify-content: space-between;
+  padding: 12px;
+  border-radius: 12px;
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.call-item:hover {
+  background: #fafafa;
+  transform: translateX(5px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.call-name {
+  font-weight: 600;
+  font-size: 14px;
+  color: #222;
+}
+
+.call-type {
+  font-size: 13px;
+  color: #ff4d00;
+}
+
+.call-location {
+  font-size: 12px;
+  color: #666;
+}
+
+.call-meta {
+  text-align: right;
+}
+
+.call-time {
+  font-size: 12px;
+  color: #777;
+}
+
+/* BADGES */
+.badge {
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 12px;
+  color: white;
+  display: inline-block;
+  margin-bottom: 4px;
+  transition: all 0.3s ease;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+}
+
+.badge:hover {
+  transform: scale(1.05);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.badge.pending {
+  background: linear-gradient(135deg, #ff8e32, #ff6a00);
+}
+
+.badge.responded {
+  background: linear-gradient(135deg, #1cab57, #158842);
+}
+
+/* No more results */
+.no-more {
+  margin-top: 20px;
+  text-align: center;
+  color: #888;
+  font-size: 13px;
+}
+
+/* Responsive Design */
+@media (max-width: 1024px) {
+  .main-content-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .stats-grid {
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  .dashboard-page {
+    padding: 20px;
+  }
+  
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .search-input {
+    width: 100%;
+  }
+  
+  .search-input:focus {
+    width: 100%;
+  }
+}

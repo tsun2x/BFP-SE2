@@ -1,0 +1,6 @@
+
+# Environment variables — NEVER commit real secrets
+.env
+.env.*
+!.env.example
+!.env.sample

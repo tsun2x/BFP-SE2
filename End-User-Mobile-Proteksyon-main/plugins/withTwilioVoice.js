@@ -1,4 +1,7 @@
-const { withMainApplication, withAndroidManifest } = require("expo/config-plugins");
+const {
+  withMainApplication,
+  withAndroidManifest,
+} = require("expo/config-plugins");
 
 /**
  * Expo config plugin for @twilio/voice-react-native-sdk
@@ -40,7 +43,7 @@ function withTwilioVoiceApplication(config) {
     if (!contents.includes("voiceApplicationProxy")) {
       contents = contents.replace(
         "class MainApplication : Application(), ReactApplication {",
-        "class MainApplication : Application(), ReactApplication {\n\n  private lateinit var voiceApplicationProxy: VoiceApplicationProxy"
+        "class MainApplication : Application(), ReactApplication {\n\n  private lateinit var voiceApplicationProxy: VoiceApplicationProxy",
       );
     }
 
@@ -48,7 +51,7 @@ function withTwilioVoiceApplication(config) {
     if (!contents.includes("voiceApplicationProxy = VoiceApplicationProxy")) {
       contents = contents.replace(
         "super.onCreate()",
-        "super.onCreate()\n    voiceApplicationProxy = VoiceApplicationProxy(this)\n    voiceApplicationProxy.onCreate()"
+        "super.onCreate()\n    voiceApplicationProxy = VoiceApplicationProxy(this)\n    voiceApplicationProxy.onCreate()",
       );
     }
 
@@ -83,6 +86,10 @@ function withTwilioVoiceManifest(config) {
       "android.permission.MODIFY_AUDIO_SETTINGS",
       "android.permission.BLUETOOTH",
       "android.permission.BLUETOOTH_CONNECT",
+      "android.permission.POST_NOTIFICATIONS",
+      "android.permission.WAKE_LOCK",
+      "android.permission.FOREGROUND_SERVICE",
+      "android.permission.FOREGROUND_SERVICE_MICROPHONE",
     ];
 
     if (!manifest["uses-permission"]) {
@@ -91,7 +98,7 @@ function withTwilioVoiceManifest(config) {
 
     for (const perm of permissions) {
       const exists = manifest["uses-permission"].some(
-        (p) => p.$?.["android:name"] === perm
+        (p) => p.$?.["android:name"] === perm,
       );
       if (!exists) {
         manifest["uses-permission"].push({

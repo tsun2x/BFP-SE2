@@ -41,27 +41,94 @@
 
 .call-search-icon {
   position: absolute;
-  left: 12px;
+  left: 14px;
   top: 50%;
   transform: translateY(-50%);
-  font-size: 16px;
-  color: #ff7a00;
+  width: 18px;
+  height: 18px;
+  color: #dc2626;
+  z-index: 1;
+  pointer-events: none;
+  transition: all 0.3s ease;
 }
+
+.call-search-icon svg {
+  width: 100%;
+  height: 100%;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.call-search-wrapper:focus-within .call-search-icon {
+  color: #b91c1c;
+  transform: translateY(-50%) scale(1.1);
+}
+
+/* FILTER DROPDOWNS */
+.filter-dropdowns {
+  display: flex;
+  gap: 15px;
+  align-items: center;
+}
+
+.filter-select {
+  padding: 10px 14px;
+  border: 2px solid #e1e1e1;
+  border-radius: 8px;
+  background: #fafafa;
+  font-size: 14px;
+  font-weight: 500;
+  color: #333;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  min-width: 160px;
+}
+
+.filter-select:focus {
+  outline: none;
+  border-color: #b11226;
+  box-shadow: 0 0 0 3px rgba(177, 18, 38, 0.15);
+  background: #fff;
+}
+
+.filter-select:hover {
+  border-color: #b11226;
+}
+
 
 /* SEARCH INPUT */
 .call-search-input {
   width: 100%;
   height: 42px;
-  padding-left: 40px;
-  padding-right: 12px;
-  border: 1px solid #ccc;
-  border-radius: 8px;
+  padding-left: 45px;
+  padding-right: 14px;
+  border: 2px solid #e1e1e1;
+  border-radius: 12px;
   font-size: 14px;
   outline: none;
+  background: #fafafa;
+  transition: all 0.3s ease;
+  box-sizing: border-box;
+}
+
+.call-search-input::placeholder {
+  color: #9ca3af;
+  font-weight: 400;
 }
 
 .call-search-input:focus {
-  border-color: #ff7a00;
+  border-color: #dc2626;
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.1);
+  transform: translateY(-1px);
+}
+
+.call-search-input:hover {
+  border-color: #dc2626;
+  background: #fff;
 }
 
 /* FILTERS */
@@ -92,7 +159,7 @@
 }
 
 .call-filter-input:focus {
-  border-color: #ff7a00;
+  border-color: #dc2626;
 }
 
 /* -------------------------------------- */
@@ -102,7 +169,7 @@
   background: #fff;
   border-radius: 14px;
   overflow: hidden;
-  border: 2px solid #ff7a00;
+  border: 2px solid #dc2626;
   box-shadow: 0 2px 6px rgba(0,0,0,0.08);
 }
 
@@ -112,7 +179,7 @@
 }
 
 .call-table-card thead th {
-  background: linear-gradient(to right, #c63600, #ff7a00);
+  background: linear-gradient(to right, #991b1b, #dc2626);
   color: #fff;
   padding: 14px;
   font-size: 15px;
@@ -175,7 +242,7 @@
   color: #c25e00;
 }
 .call-dispatching .call-status-dot {
-  background: #ff7a00;
+  background: #dc2626;
 }
 
 /* Ongoing = Blue */
@@ -218,7 +285,7 @@
   padding: 8px 16px;
   border-radius: 8px;
   border: none;
-  background: linear-gradient(135deg, #ff7b00, #ff5a24);
+  background: linear-gradient(135deg, #dc2626, #b91c1c);
   color: white;
   font-weight: 600;
   font-size: 13px;
@@ -230,7 +297,7 @@
 
 .call-view-btn:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(255, 123, 0, 0.3);
+  box-shadow: 0 4px 12px rgba(220, 38, 38, 0.3);
 }
 
 .call-view-btn:active {
@@ -253,7 +320,7 @@
 }
 
 .call-details-btn {
-  background: #ff7a00;
+  background: #dc2626;
   color: #fff;
   padding: 8px 14px;
   border: none;
@@ -264,7 +331,7 @@
 }
 
 .call-details-btn:hover {
-  background: #d66200;
+  background: #b91c1c;
 }
 
 /* -------------------------------------- */
@@ -307,9 +374,9 @@
   font-size: 13px;
 }
 .call-pending { background: #f6c67a; color:#7a4d00; }
-.call-dispatch-on-the-way { background: #ff9f43; color:#fff; }
+.call-dispatch-on-the-way { background: #dc2626; color:#fff; }
 .call-ongoing-response { background: #3aa0ff; color:#fff; }
-.call-fire-under-control { background: #ffb84d; color:#4a2c00; }
+.call-fire-under-control { background: #ea580c; color:#fff; }
 .call-resolved { background: #2ecc71; color:#fff; }
 
 /* small tweaks for the actions button in table */

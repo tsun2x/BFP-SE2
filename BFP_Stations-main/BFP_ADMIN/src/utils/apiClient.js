@@ -2,8 +2,10 @@
  * API Client with JWT token support
  */
 
+import { API_BASE } from "./runtimeConfig";
+
 const getApiUrl = () => {
-  return import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+  return API_BASE;
 };
 
 const getToken = () => {
@@ -19,7 +21,7 @@ export const apiCall = async (endpoint, options = {}) => {
     ...options.headers,
   };
 
-  if (token) {
+  if (token && !headers["Authorization"] && !headers["authorization"]) {
     headers["Authorization"] = `Bearer ${token}`;
   }
 
@@ -30,13 +32,34 @@ export const apiCall = async (endpoint, options = {}) => {
     });
 
     if (response.status === 401) {
-      // Token might be expired, clear auth
-      localStorage.removeItem("authToken");
-      localStorage.removeItem("user");
-      window.location.href = "/login";
+      // Don't redirect if we're on the login page or calling the login endpoint
+      const isLoginRequest =
+        endpoint === "/login" ||
+        endpoint === "/signup" ||
+        endpoint === "/signup-station";
+      if (!isLoginRequest) {
+        // Token might be expired, clear auth
+        localStorage.removeItem("authToken");
+        localStorage.removeItem("user");
+        window.location.href = "/login";
+      }
     }
 
-    const data = await response.json();
+    const contentType = response.headers.get("content-type") || "";
+    let data;
+
+    if (contentType.includes("application/json")) {
+      data = await response.json();
+    } else {
+      // Non-JSON response (HTML or plain text) - capture text for debugging
+      const text = await response.text();
+      // If response is not OK, throw with the returned text to make debugging easier
+      if (!response.ok) {
+        throw new Error(text || `API error: ${response.status}`);
+      }
+      // If OK but non-JSON, return raw text wrapped in an object
+      return { success: true, data: text };
+    }
 
     if (!response.ok) {
       throw new Error(data.message || `API error: ${response.status}`);
@@ -52,32 +75,32 @@ export const apiCall = async (endpoint, options = {}) => {
 // Create an object with helper methods for common HTTP verbs
 const apiClient = {
   get: (endpoint, options = {}) => {
-    return apiCall(endpoint, { ...options, method: 'GET' });
+    return apiCall(endpoint, { ...options, method: "GET" });
   },
   post: (endpoint, data = {}, options = {}) => {
     return apiCall(endpoint, {
       ...options,
-      method: 'POST',
-      body: JSON.stringify(data)
+      method: "POST",
+      body: JSON.stringify(data),
     });
   },
   patch: (endpoint, data = {}, options = {}) => {
     return apiCall(endpoint, {
       ...options,
-      method: 'PATCH',
-      body: JSON.stringify(data)
+      method: "PATCH",
+      body: JSON.stringify(data),
     });
   },
   put: (endpoint, data = {}, options = {}) => {
     return apiCall(endpoint, {
       ...options,
-      method: 'PUT',
-      body: JSON.stringify(data)
+      method: "PUT",
+      body: JSON.stringify(data),
     });
   },
   delete: (endpoint, options = {}) => {
-    return apiCall(endpoint, { ...options, method: 'DELETE' });
-  }
+    return apiCall(endpoint, { ...options, method: "DELETE" });
+  },
 };
 
 export default apiClient;

@@ -1,47 +1,48 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
-import { API_URL } from '../../config';
+import { NODE_API_URL } from '../../config';
 
 export const VerifyOtpScreen = ({ route, navigation }) => {
-  const { userId, phone } = route.params || {};
+  const { phone, email } = route.params || {};
   const [code, setCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleVerify = async () => {
     if (!code.trim()) {
-      setError('Please enter the code sent to your phone.');
+      setError('Please enter the code sent to your phone or email.');
       return;
     }
-
     try {
       setLoading(true);
       setError(null);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
-      const response = await fetch(`${API_URL}/api/enduser/verify-otp`, {
+      const body: any = { otp: code.trim() };
+      if (phone) body.phone = phone;
+      else if (email) body.email = email;
+      else { setError('No phone or email provided.'); return; }
+
+      const res = await fetch(`${NODE_API_URL}/api/verify-otp`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          user_id: userId,
-          code: code.trim(),
-        }),
+        headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
+        body: JSON.stringify(body),
       });
+      const data = await res.json();
 
-      const json = await response.json();
-
-      if (!response.ok || !json.success) {
-        setError(json.error || 'Invalid or expired code. Please try again.');
+      if (!res.ok) {
+        setError(data.message || 'Invalid or expired code. Please try again.');
         return;
       }
 
-      // OTP verified – proceed to main app
-      navigation.replace('MainTabs');
+      // OTP verified – account is verified, go to login
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert('Verified!', 'Your account has been verified. Please login.', [
+        { text: 'OK', onPress: () => navigation.replace('Login') },
+      ]);
     } catch (e) {
       console.error('Error verifying OTP:', e);
       setError('Something went wrong. Please try again.');
@@ -62,9 +63,9 @@ export const VerifyOtpScreen = ({ route, navigation }) => {
             style={{ flex: 1 }}
           >
             <View style={styles.container}>
-              <Text style={styles.title}>Verify your phone</Text>
+              <Text style={styles.title}>Verify your {phone ? 'phone' : 'email'}</Text>
               <Text style={styles.subtitle}>
-                We sent a 6-digit code to {phone || 'your phone number'}
+                We sent a 6-digit code to {phone || email || 'your contact'}
               </Text>
 
               <View style={styles.inputGroup}>

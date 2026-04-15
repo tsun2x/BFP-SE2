@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useStatus } from "../context/StatusContext";
 import "../style/stationreadiness.css";
 import ConfirmModal from "../components/ConfirmModal";
 import Toast from "../components/Toast";
+import apiClient from "../utils/apiClient";
 
 export default function StationReadiness() {
   const { user } = useAuth();
@@ -19,16 +20,229 @@ export default function StationReadiness() {
     generator: false,
   });
 
+  const [checklistLabels, setChecklistLabels] = useState({
+    firetruck: "Firetruck Operational",
+    scba: "SCBA Sets Complete",
+    hoses: "Hoses Functional",
+    radio: "Radio Communication Working",
+    water: "Water Supply Adequate",
+    crew: "Minimum Crew On Duty",
+    oic: "Officer-In-Charge Present",
+    driver: "Driver Available",
+    generator: "Generator Functional",
+  });
+
+  const [itemCategories, setItemCategories] = useState({
+    firetruck: "equipment",
+    scba: "equipment",
+    hoses: "equipment",
+    radio: "equipment",
+    water: "equipment",
+    crew: "personnel",
+    oic: "personnel",
+    driver: "personnel",
+    generator: "personnel",
+  });
+
   const [modalOpen, setModalOpen] = useState(false);
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState(null);
   const [loading, setLoading] = useState(false);
   const [toastMessage, setToastMessage] = useState("");
   const [toastType, setToastType] = useState("success");
+
+  // Edit modal state
+  const [editingItem, setEditingItem] = useState(null);
+  const [newItemKey, setNewItemKey] = useState("");
+  const [newItemLabel, setNewItemLabel] = useState("");
+  const [newItemCategory, setNewItemCategory] = useState("equipment");
+  const [editItemLabel, setEditItemLabel] = useState("");
+
+  // Restrict special characters in checklist item names
+  const handleLabelChange = (value, setter) => {
+    // Only allow letters, numbers, spaces, hyphens, parentheses, and basic punctuation
+    const sanitized = value.replace(/[^a-zA-Z0-9\s\-\(\)\.,]/g, "");
+    setter(sanitized);
+  };
 
   // Use status context
   const { updateStationStatus } = useStatus();
 
   const toggleItem = (key) => {
     setChecklist((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  // Fetch saved custom checklist items on mount
+  useEffect(() => {
+    const fetchChecklistItems = async () => {
+      const stationId =
+        user?.assignedStationId ||
+        user?.assigned_station_id ||
+        user?.stationInfo?.station_id;
+
+      if (!stationId) return;
+
+      try {
+        const response = await apiClient.get(
+          `/station-checklist-items/${stationId}`,
+        );
+        const items = response?.data || [];
+
+        if (items.length > 0) {
+          const newChecklist = {};
+          const newLabels = {};
+          const newCategories = {};
+
+          items.forEach((item) => {
+            newChecklist[item.item_key] = false;
+            newLabels[item.item_key] = item.item_label;
+            newCategories[item.item_key] = item.category || "equipment";
+          });
+
+          setChecklist((prev) => ({ ...prev, ...newChecklist }));
+          setChecklistLabels((prev) => ({ ...prev, ...newLabels }));
+          setItemCategories((prev) => ({ ...prev, ...newCategories }));
+        }
+      } catch (error) {
+        console.error("Error fetching checklist items:", error);
+        setToastMessage("Failed to load custom checklist items");
+        setToastType("error");
+      }
+    };
+
+    fetchChecklistItems();
+  }, [user]);
+
+  // Checklist management functions
+  const addChecklistItem = async () => {
+    const trimmed = newItemLabel.trim();
+    if (!trimmed) {
+      setToastMessage("Please enter an item name");
+      setToastType("error");
+      return;
+    }
+
+    const key = trimmed.toLowerCase().replace(/\s+/g, "_");
+
+    // Check for duplicate key
+    if (checklistLabels[key]) {
+      setToastMessage(
+        `An item with the name "${checklistLabels[key]}" already exists`,
+      );
+      setToastType("error");
+      return;
+    }
+
+    const stationId =
+      user?.assignedStationId ||
+      user?.assigned_station_id ||
+      user?.stationInfo?.station_id;
+
+    if (!stationId) {
+      setToastMessage("Your account is not assigned to a station");
+      setToastType("error");
+      return;
+    }
+
+    try {
+      setLoading(true);
+      await apiClient.post("/station-checklist-items", {
+        stationId,
+        itemKey: key,
+        itemLabel: trimmed,
+        category: newItemCategory,
+      });
+
+      setChecklist((prev) => ({ ...prev, [key]: false }));
+      setChecklistLabels((prev) => ({ ...prev, [key]: trimmed }));
+      setItemCategories((prev) => ({ ...prev, [key]: newItemCategory }));
+      setNewItemLabel("");
+      setNewItemCategory("equipment");
+      setToastMessage("New checklist item added successfully");
+      setToastType("success");
+    } catch (error) {
+      console.error("Error adding checklist item:", error);
+      setToastMessage(error?.message || "Failed to add checklist item");
+      setToastType("error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const updateChecklistItem = async () => {
+    if (!editingItem) return;
+    const trimmed = editItemLabel.trim();
+    if (!trimmed) {
+      setToastMessage("Please enter a display name");
+      setToastType("error");
+      return;
+    }
+    try {
+      setLoading(true);
+      await apiClient.put(`/station-checklist-items/${editingItem}`, {
+        itemLabel: trimmed,
+      });
+
+      setChecklistLabels((prev) => ({
+        ...prev,
+        [editingItem]: trimmed,
+      }));
+      setEditingItem(null);
+      setEditItemLabel("");
+      setToastMessage("Checklist item updated successfully");
+      setToastType("success");
+    } catch (error) {
+      console.error("Error updating checklist item:", error);
+      setToastMessage(error?.message || "Failed to update checklist item");
+      setToastType("error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const deleteChecklistItem = (key) => {
+    setItemToDelete(key);
+    setDeleteModalOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!itemToDelete) return;
+    try {
+      setLoading(true);
+      await apiClient.delete(`/station-checklist-items/${itemToDelete}`);
+
+      setChecklist((prev) => {
+        const newChecklist = { ...prev };
+        delete newChecklist[itemToDelete];
+        return newChecklist;
+      });
+      setChecklistLabels((prev) => {
+        const newLabels = { ...prev };
+        delete newLabels[itemToDelete];
+        return newLabels;
+      });
+      setItemCategories((prev) => {
+        const newCategories = { ...prev };
+        delete newCategories[itemToDelete];
+        return newCategories;
+      });
+      setToastMessage("Checklist item deleted successfully");
+      setToastType("success");
+      setItemToDelete(null);
+      setDeleteModalOpen(false);
+    } catch (error) {
+      console.error("Error deleting checklist item:", error);
+      setToastMessage(error?.message || "Failed to delete checklist item");
+      setToastType("error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const openEditModal = (key, label) => {
+    setEditingItem(key);
+    setEditItemLabel(label);
   };
 
   // COMPUTE STATUS
@@ -45,8 +259,10 @@ export default function StationReadiness() {
   else if (partiallyReady) finalStatus = "PARTIALLY_READY";
 
   // Calculate readiness percentage
-  const checkedItems = Object.values(checklist).filter(item => item).length;
-  const readinessPercentage = Math.round((checkedItems / Object.keys(checklist).length) * 100);
+  const checkedItems = Object.values(checklist).filter((item) => item).length;
+  const readinessPercentage = Math.round(
+    (checkedItems / Object.keys(checklist).length) * 100,
+  );
 
   const openConfirm = () => setModalOpen(true);
 
@@ -55,13 +271,6 @@ export default function StationReadiness() {
     setLoading(true);
 
     try {
-      const token = localStorage.getItem("authToken");
-      const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
-
-      if (!token) {
-        throw new Error("Not authenticated. Please log in.");
-      }
-
       if (!user?.assignedStationId) {
         throw new Error("Your account is not assigned to a station.");
       }
@@ -69,28 +278,17 @@ export default function StationReadiness() {
       const payload = {
         status: finalStatus,
         readinessPercentage,
-        equipmentChecklist: checklist
+        equipmentChecklist: checklist,
       };
 
-      const response = await fetch(`${apiUrl}/station-readiness`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(payload)
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to submit readiness');
-      }
+      await apiClient.post("/station-readiness", payload);
 
       // Update UI status
       updateStationStatus(finalStatus, readinessPercentage);
 
-      setToastMessage(`Station readiness submitted: ${finalStatus.replace(/_/g, " ")} (${readinessPercentage}%)`);
+      setToastMessage(
+        `Station readiness submitted: ${finalStatus.replace(/_/g, " ")} (${readinessPercentage}%)`,
+      );
       setToastType("success");
 
       console.log("Submitted Station Readiness:", {
@@ -116,37 +314,44 @@ export default function StationReadiness() {
       <div className="readiness-container">
         {/* Header */}
         <div className="readiness-header">
-          <h2>Station: {user?.stationInfo?.station_name || 'Not Assigned'}</h2>
-          {user?.stationInfo && (
-            <p style={{ margin: '4px 0 0 0', fontSize: '13px', opacity: 0.8 }}>
-              Station ID: {user?.assignedStationId} &bull; Submitted by: {user?.name || 'Officer'}
-            </p>
-          )}
+          <h2>Station: {user?.stationInfo?.station_name || "Not Assigned"}</h2>
+          <button
+            className="edit-checklist-btn"
+            onClick={() => setEditModalOpen(true)}
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
+              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+            </svg>
+            Edit Checklist
+          </button>
         </div>
 
         {/* Content */}
         <div className="readiness-content">
-
           {/* Equipment Checklist */}
           <div className="checklist-section">
             <h3 className="section-title">Equipment Checklist</h3>
             <div className="checklist-items">
-              {[
-                ["firetruck", "Firetruck Operational"],
-                ["scba", "SCBA Sets Complete"],
-                ["hoses", "Hoses Functional"],
-                ["radio", "Radio Communication Working"],
-                ["water", "Water Supply Adequate"],
-              ].map(([key, label]) => (
-                <label key={key} className="check-row">
-                  <input
-                    type="checkbox"
-                    checked={checklist[key]}
-                    onChange={() => toggleItem(key)}
-                  />
-                  <span>{label}</span>
-                </label>
-              ))}
+              {Object.entries(checklistLabels)
+                .filter(([key]) => itemCategories[key] === "equipment")
+                .map(([key, label]) => (
+                  <label key={key} className="check-row">
+                    <input
+                      type="checkbox"
+                      checked={checklist[key] || false}
+                      onChange={() => toggleItem(key)}
+                    />
+                    <span>{label}</span>
+                  </label>
+                ))}
             </div>
           </div>
 
@@ -154,39 +359,215 @@ export default function StationReadiness() {
           <div className="checklist-section">
             <h3 className="section-title">Personnel & Station</h3>
             <div className="checklist-items">
-              {[
-                ["crew", "Minimum Crew On Duty"],
-                ["oic", "Officer-In-Charge Present"],
-                ["driver", "Driver Available"],
-                ["generator", "Generator Functional"],
-              ].map(([key, label]) => (
-                <label key={key} className="check-row">
-                  <input
-                    type="checkbox"
-                    checked={checklist[key]}
-                    onChange={() => toggleItem(key)}
-                  />
-                  <span>{label}</span>
-                </label>
-              ))}
+              {Object.entries(checklistLabels)
+                .filter(([key]) => itemCategories[key] === "personnel")
+                .map(([key, label]) => (
+                  <label key={key} className="check-row">
+                    <input
+                      type="checkbox"
+                      checked={checklist[key] || false}
+                      onChange={() => toggleItem(key)}
+                    />
+                    <span>{label}</span>
+                  </label>
+                ))}
             </div>
           </div>
 
           {/* Status Section */}
           <div className="status-section">
             <h3>Station Status</h3>
-            <div className={`status-meter ${finalStatus.replace(/_/g, "").toLowerCase()}`}>
+            <div
+              className={`status-meter ${finalStatus.replace(/_/g, "").toLowerCase()}`}
+            >
               <span>{finalStatus.replace(/_/g, " ")}</span>
               <span className="readiness-percent">{readinessPercentage}%</span>
             </div>
-            <p className="status-note">Review your checklist before confirming readiness.</p>
-            <button className="confirm-button" onClick={openConfirm} disabled={loading}>
+            <p className="status-note">
+              Review your checklist before confirming readiness.
+            </p>
+            <button
+              className="confirm-button"
+              onClick={openConfirm}
+              disabled={loading}
+            >
               {loading ? "Submitting..." : "Confirm Readiness"}
             </button>
           </div>
-
         </div>
       </div>
+
+      {/* Edit Modal */}
+      {editModalOpen && (
+        <div className="edit-modal-overlay">
+          <div className="edit-modal">
+            <div className="edit-modal-header">
+              <h3>Manage Checklist Items</h3>
+              <button
+                className="close-modal-btn"
+                onClick={() => {
+                  setEditModalOpen(false);
+                  setEditingItem(null);
+                  setNewItemKey("");
+                  setNewItemLabel("");
+                  setEditItemLabel("");
+                }}
+              >
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+              </button>
+            </div>
+
+            <div className="edit-modal-content">
+              {/* Add New Item */}
+              <div className="add-item-section">
+                <h4>Add New Item</h4>
+                <div className="form-group">
+                  <label>Category</label>
+                  <select
+                    value={newItemCategory}
+                    onChange={(e) => setNewItemCategory(e.target.value)}
+                    className="category-select"
+                  >
+                    <option value="equipment">Equipment Checklist</option>
+                    <option value="personnel">Personnel & Station</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Name (e.g., "Firetruck Operational")</label>
+                  <input
+                    type="text"
+                    value={newItemLabel}
+                    onChange={(e) =>
+                      handleLabelChange(e.target.value, setNewItemLabel)
+                    }
+                    placeholder="Enter item name"
+                  />
+                </div>
+                <button
+                  className="add-item-btn"
+                  onClick={addChecklistItem}
+                  disabled={loading}
+                >
+                  {loading ? "Adding..." : "Add Item"}
+                </button>
+              </div>
+
+              {/* Edit Existing Item */}
+              {editingItem && (
+                <div className="edit-item-section">
+                  <h4>Edit Item</h4>
+                  <div className="form-group">
+                    <label>Display Text</label>
+                    <input
+                      type="text"
+                      value={editItemLabel}
+                      onChange={(e) =>
+                        handleLabelChange(e.target.value, setEditItemLabel)
+                      }
+                      placeholder="Enter display text"
+                    />
+                  </div>
+                  <div className="edit-actions">
+                    <button
+                      className="save-item-btn"
+                      onClick={updateChecklistItem}
+                    >
+                      Save Changes
+                    </button>
+                    <button
+                      className="cancel-edit-btn"
+                      onClick={() => {
+                        setEditingItem(null);
+                        setEditItemLabel("");
+                      }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Current Items */}
+              <div className="current-items-section">
+                <h4>Equipment Checklist</h4>
+                <div className="items-list">
+                  {Object.entries(checklistLabels)
+                    .filter(([key]) => itemCategories[key] === "equipment")
+                    .map(([key, label]) => (
+                      <div key={key} className="item-row">
+                        <span className="item-key">{key}</span>
+                        <span className="item-label">{label}</span>
+                        <div className="item-actions">
+                          <button
+                            className="item-edit-btn"
+                            onClick={() => openEditModal(key, label)}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            className="item-delete-btn"
+                            onClick={() => deleteChecklistItem(key)}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+
+                <h4 style={{ marginTop: "24px" }}>Personnel & Station</h4>
+                <div className="items-list">
+                  {Object.entries(checklistLabels)
+                    .filter(([key]) => itemCategories[key] === "personnel")
+                    .map(([key, label]) => (
+                      <div key={key} className="item-row">
+                        <span className="item-key">{key}</span>
+                        <span className="item-label">{label}</span>
+                        <div className="item-actions">
+                          <button
+                            className="item-edit-btn"
+                            onClick={() => openEditModal(key, label)}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            className="item-delete-btn"
+                            onClick={() => deleteChecklistItem(key)}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteModalOpen && (
+        <ConfirmModal
+          title="Delete Checklist Item?"
+          message={`Are you sure you want to delete "${checklistLabels[itemToDelete]}". This action cannot be undone.`}
+          onConfirm={confirmDelete}
+          onCancel={() => {
+            setDeleteModalOpen(false);
+            setItemToDelete(null);
+          }}
+        />
+      )}
 
       {/* MODAL */}
       {modalOpen && (

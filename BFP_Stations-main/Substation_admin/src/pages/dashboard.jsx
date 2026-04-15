@@ -1,111 +1,503 @@
-import "../style/dashboard.css";
+import '../style/dashboard.css';
+import { useState, useEffect } from 'react';
+import apiClient from '../utils/apiClient';
 
 export default function Dashboard() {
+  const [selectedPeriod, setSelectedPeriod] = useState('month');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [allIncidents, setAllIncidents] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedIncident, setSelectedIncident] = useState(null);
+
+  useEffect(() => {
+    const loadIncidents = (showLoader = false) => {
+      if (showLoader) setLoading(true);
+      apiClient
+        .get('/incidents')
+        .then((data) => setAllIncidents(data?.incidents || []))
+        .catch(() => setAllIncidents([]))
+        .finally(() => setLoading(false));
+    };
+
+    const handleIncidentStatusUpdated = () => {
+      loadIncidents(false);
+    };
+
+    loadIncidents(true);
+    window.addEventListener('incident-status-updated', handleIncidentStatusUpdated);
+
+    return () => {
+      window.removeEventListener('incident-status-updated', handleIncidentStatusUpdated);
+    };
+  }, []);
+
+  const filterByPeriod = (incidents, period) => {
+    const now = new Date();
+    return incidents.filter((inc) => {
+      const t = inc.call_time ? new Date(inc.call_time) : null;
+      if (!t || isNaN(t.getTime())) return false;
+      if (period === 'day')
+        return (
+          t.getFullYear() === now.getFullYear() &&
+          t.getMonth() === now.getMonth() &&
+          t.getDate() === now.getDate()
+        );
+      if (period === 'month')
+        return t.getFullYear() === now.getFullYear() && t.getMonth() === now.getMonth();
+      if (period === 'custom') {
+        const from = dateFrom ? new Date(dateFrom) : null;
+        const to = dateTo ? new Date(dateTo) : null;
+        if (from) from.setHours(0, 0, 0, 0);
+        if (to) to.setHours(23, 59, 59, 999);
+        if (from && t < from) return false;
+        if (to && t > to) return false;
+        return true;
+      }
+      return t.getFullYear() === now.getFullYear();
+    });
+  };
+
+  const periodLabel =
+    selectedPeriod === 'day'
+      ? 'Today'
+      : selectedPeriod === 'month'
+        ? 'This Month'
+        : selectedPeriod === 'custom'
+          ? dateFrom || dateTo
+            ? `${dateFrom ? new Date(dateFrom).toLocaleDateString() : 'Start'} – ${dateTo ? new Date(dateTo).toLocaleDateString() : 'Today'}`
+            : 'Custom Range'
+          : 'This Year';
+
+  const periodIncidents = filterByPeriod(allIncidents, selectedPeriod);
+  const totalCalls = periodIncidents.length;
+  const pending = periodIncidents.filter((i) => i.status === 'Pending Dispatch').length;
+  const dispatchedOnly = periodIncidents.filter((i) => i.status === 'Dispatched').length;
+  const onScene = periodIncidents.filter((i) => i.status === 'On Scene').length;
+  const underControl = periodIncidents.filter((i) => i.status === 'Under Control').length;
+  const resolved = periodIncidents.filter((i) => i.status === 'Resolved').length;
+  const cancelled = periodIncidents.filter((i) => i.status === 'Cancelled').length;
+  const dispatched = dispatchedOnly + onScene + underControl + resolved;
+
+  const responseTimes = periodIncidents
+    .filter((i) => i.dispatch_time && i.call_time)
+    .map((i) => (new Date(i.dispatch_time) - new Date(i.call_time)) / 60000);
+  const avgResponseTime = responseTimes.length
+    ? Math.round(responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length)
+    : null;
+
+  const dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const dayCounts = [0, 0, 0, 0, 0, 0, 0];
+  periodIncidents.forEach((i) => {
+    if (i.call_time) dayCounts[new Date(i.call_time).getDay()]++;
+  });
+  const maxDayCount = Math.max(...dayCounts, 1);
+
+  const recentIncidents = allIncidents.slice(0, 5);
+
+  const timeAgo = (isoStr) => {
+    if (!isoStr) return '';
+    const diff = Date.now() - new Date(isoStr).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'just now';
+    if (mins < 60) return `${mins} min ago`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}h ago`;
+    return `${Math.floor(hrs / 24)}d ago`;
+  };
+
+  const statusClass = (status) => {
+    if (status === 'Pending Dispatch') return 'high-priority';
+    if (status === 'Dispatched' || status === 'On Scene') return 'medium-priority';
+    return 'low-priority';
+  };
+
+  const statusBadge = (status) => {
+    if (status === 'Dispatched') return <span className="status-badge dispatched">DISPATCHED</span>;
+    if (status === 'On Scene') return <span className="status-badge dispatched">ON SCENE</span>;
+    if (status === 'Under Control')
+      return <span className="status-badge completed">UNDER CONTROL</span>;
+    if (status === 'Resolved') return <span className="status-badge completed">RESOLVED</span>;
+    if (status === 'Cancelled') return <span className="status-badge">CANCELLED</span>;
+    return <button className="action-btn respond">Pending</button>;
+  };
+
   return (
     <div className="dashboard-page">
-
       {/* Page Header */}
       <div className="dashboard-header">
-        <h1>Dashboard</h1>
-        <p>Operational overview — dispatched incidents, incoming calls, and incident breakdown.</p>
+        <h1>Bureau of Fire Protection Dashboard</h1>
+        <p>Substation - Operational Statistics and Incident Monitoring</p>
+      </div>
+
+      {/* Period Selector */}
+      <div className="period-selector">
+        <label className="period-label">Reporting Period:</label>
+        <div className="period-buttons">
+          <button
+            className={`period-btn ${selectedPeriod === 'day' ? 'active' : ''}`}
+            onClick={() => setSelectedPeriod('day')}
+          >
+            Daily
+          </button>
+          <button
+            className={`period-btn ${selectedPeriod === 'month' ? 'active' : ''}`}
+            onClick={() => setSelectedPeriod('month')}
+          >
+            Monthly
+          </button>
+          <button
+            className={`period-btn ${selectedPeriod === 'year' ? 'active' : ''}`}
+            onClick={() => setSelectedPeriod('year')}
+          >
+            Yearly
+          </button>
+          <button
+            className={`period-btn ${selectedPeriod === 'custom' ? 'active' : ''}`}
+            onClick={() => setSelectedPeriod('custom')}
+          >
+            Date Range
+          </button>
+          {selectedPeriod === 'custom' && (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                marginLeft: '8px',
+                flexWrap: 'wrap',
+              }}
+            >
+              <input
+                type="date"
+                value={dateFrom}
+                max={dateTo || new Date().toISOString().split('T')[0]}
+                onChange={(e) => setDateFrom(e.target.value)}
+                style={{
+                  padding: '6px 10px',
+                  borderRadius: '6px',
+                  border: '1px solid var(--border)',
+                  fontSize: '14px',
+                  background: 'var(--card-bg, #fff)',
+                  color: 'var(--text, #111)',
+                }}
+              />
+              <span style={{ color: 'var(--muted)', fontSize: '14px' }}>to</span>
+              <input
+                type="date"
+                value={dateTo}
+                min={dateFrom}
+                max={new Date().toISOString().split('T')[0]}
+                onChange={(e) => setDateTo(e.target.value)}
+                style={{
+                  padding: '6px 10px',
+                  borderRadius: '6px',
+                  border: '1px solid var(--border)',
+                  fontSize: '14px',
+                  background: 'var(--card-bg, #fff)',
+                  color: 'var(--text, #111)',
+                }}
+              />
+            </div>
+          )}
+        </div>
       </div>
 
       {/* TOP STATS ROW */}
-      <div className="stats-grid">
-
-        {/* CARD 1 */}
+      <div className="stats-container">
         <div className="stat-card">
-          <div className="stat-left">
-            <h2>22</h2>
-            <p>Dispatched Incidents</p>
-            <span>This Month</span>
+          <div className="stat-header">
+            <h3>Dispatched Incidents</h3>
+            <div className="stat-icon dispatched">
+              <i className="fa-solid fa-truck"></i>
+            </div>
           </div>
-
-          <div className="stat-icon">
-            <i className="fa-solid fa-chart-simple"></i>
-          </div>
+          <div className="stat-value">{loading ? '…' : dispatched}</div>
+          <div className="stat-period">{periodLabel}</div>
         </div>
-
-        {/* CARD 2 */}
         <div className="stat-card">
-          <div className="stat-left">
-            <h2>16</h2>
-            <p>Fire Incidents</p>
-            <span>This Month</span>
+          <div className="stat-header">
+            <h3>Emergency Calls</h3>
+            <div className="stat-icon calls">
+              <i className="fa-solid fa-phone"></i>
+            </div>
           </div>
-
-          <div className="stat-icon">
-            <i className="fa-solid fa-fire"></i>
-          </div>
+          <div className="stat-value">{loading ? '…' : totalCalls}</div>
+          <div className="stat-period">{periodLabel}</div>
         </div>
-
-        {/* CARD 3 */}
         <div className="stat-card">
-          <div className="stat-left">
-            <h2>72</h2>
-            <p>Total Calls</p>
-            <span>This Month</span>
+          <div className="stat-header">
+            <h3>Pending Alarms</h3>
+            <div className="stat-icon fire">
+              <i className="fa-solid fa-bell"></i>
+            </div>
           </div>
-
-          <div className="stat-icon">
-            <i className="fa-solid fa-phone-volume"></i>
-          </div>
+          <div className="stat-value">{loading ? '…' : pending}</div>
+          <div className="stat-period">{periodLabel}</div>
         </div>
-
+        <div className="stat-card">
+          <div className="stat-header">
+            <h3>Avg Response Time</h3>
+            <div className="stat-icon response">
+              <i className="fa-solid fa-stopwatch"></i>
+            </div>
+          </div>
+          <div className="stat-value">
+            {loading ? '…' : avgResponseTime !== null ? `${avgResponseTime} min` : 'N/A'}
+          </div>
+          <div className="stat-period">{periodLabel}</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-header">
+            <h3>Resolved Incidents</h3>
+            <div className="stat-icon resolved">
+              <i className="fa-solid fa-check"></i>
+            </div>
+          </div>
+          <div className="stat-value">{loading ? '…' : resolved}</div>
+          <div className="stat-period">{periodLabel}</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-header">
+            <h3>Active Dispatches</h3>
+            <div className="stat-icon reports">
+              <i className="fa-solid fa-fire-flame-curved"></i>
+            </div>
+          </div>
+          <div className="stat-value">{loading ? '…' : Math.max(0, dispatched - resolved)}</div>
+          <div className="stat-period">{periodLabel}</div>
+        </div>
       </div>
 
-      {/* MAIN GRID */}
-      <div className="main-content-grid">
-
-        {/* LEFT ANALYTICS */}
-        <div className="left-analytics">
-          <div className="chart-card">
-            <h3>Fire Incident Trend</h3>
-            <div className="chart-placeholder">Chart here</div>
+      {/* MAIN CONTENT GRID */}
+      <div className="main-grid">
+        {/* LEFT - INCIDENT ANALYSIS */}
+        <div className="analysis-section">
+          <div className="section-card">
+            <h3>Incident Analysis</h3>
+            <div className="chart-container">
+              <div className="simple-chart">
+                <div className="chart-bars">
+                  {dayLabels.map((label, idx) => (
+                    <div
+                      key={label}
+                      className="chart-bar"
+                      style={{
+                        height: `${Math.max(5, Math.round((dayCounts[idx] / maxDayCount) * 100))}%`,
+                      }}
+                      title={`${label}: ${dayCounts[idx]}`}
+                    >
+                      <span className="bar-label">{label}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
           </div>
 
-          <div className="chart-card">
-            <h3>Severity Breakdown</h3>
-            <div className="chart-placeholder">Chart here</div>
+          <div className="section-card">
+            <h3>Incident Status Breakdown</h3>
+            <div className="classification-grid">
+              <div className="class-item">
+                <div className="class-icon fire-class">
+                  <i className="fa-solid fa-hourglass-half"></i>
+                </div>
+                <div className="class-details">
+                  <h4>Pending</h4>
+                  <div className="class-stats">
+                    <span className="class-count">{pending}</span>
+                    <span className="class-percent">
+                      {totalCalls ? Math.round((pending / totalCalls) * 100) : 0}%
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <div className="class-item">
+                <div className="class-icon medical-class">
+                  <i className="fa-solid fa-truck"></i>
+                </div>
+                <div className="class-details">
+                  <h4>Dispatched</h4>
+                  <div className="class-stats">
+                    <span className="class-count">{dispatchedOnly}</span>
+                    <span className="class-percent">
+                      {totalCalls ? Math.round((dispatchedOnly / totalCalls) * 100) : 0}%
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <div className="class-item">
+                <div className="class-icon rescue-class">
+                  <i className="fa-solid fa-fire-flame-curved"></i>
+                </div>
+                <div className="class-details">
+                  <h4>On Scene</h4>
+                  <div className="class-stats">
+                    <span className="class-count">{onScene}</span>
+                    <span className="class-percent">
+                      {totalCalls ? Math.round((onScene / totalCalls) * 100) : 0}%
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <div className="class-item">
+                <div className="class-icon response">
+                  <i className="fa-solid fa-shield-halved"></i>
+                </div>
+                <div className="class-details">
+                  <h4>Under Control</h4>
+                  <div className="class-stats">
+                    <span className="class-count">{underControl}</span>
+                    <span className="class-percent">
+                      {totalCalls ? Math.round((underControl / totalCalls) * 100) : 0}%
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <div className="class-item">
+                <div className="class-icon resolved">
+                  <i className="fa-solid fa-check"></i>
+                </div>
+                <div className="class-details">
+                  <h4>Resolved</h4>
+                  <div className="class-stats">
+                    <span className="class-count">{resolved}</span>
+                    <span className="class-percent">
+                      {totalCalls ? Math.round((resolved / totalCalls) * 100) : 0}%
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <div className="class-item">
+                <div
+                  className="class-icon"
+                  style={{
+                    background: 'var(--muted, #888)',
+                    color: '#fff',
+                    width: 36,
+                    height: 36,
+                    borderRadius: '50%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <i className="fa-solid fa-ban"></i>
+                </div>
+                <div className="class-details">
+                  <h4>Cancelled</h4>
+                  <div className="class-stats">
+                    <span className="class-count">{cancelled}</span>
+                    <span className="class-percent">
+                      {totalCalls ? Math.round((cancelled / totalCalls) * 100) : 0}%
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* RIGHT - RECENT CALLS */}
-        <div className="recent-calls-card">
-          <div className="recent-header">
-            <h3>Recent Emergency Calls</h3>
-          </div>
+        {/* RIGHT - RECENT INCIDENTS */}
+        <div className="incidents-section">
+          <div className="section-card">
+            <div className="section-header">
+              <h3>Recent Incidents</h3>
+            </div>
 
-          {/* Call 1 */}
-          <div className="call-item">
-            <div>
-              <p className="call-name">Juan Dela Cruz</p>
-              <p className="call-type">Electrical Fire</p>
-              <p className="call-location">Brgy. Mikalig</p>
+            <div className="incidents-list">
+              {loading ? (
+                <div style={{ padding: '20px', textAlign: 'center', color: 'var(--muted)' }}>
+                  Loading incidents…
+                </div>
+              ) : recentIncidents.length === 0 ? (
+                <div style={{ padding: '20px', textAlign: 'center', color: 'var(--muted)' }}>
+                  No incidents found
+                </div>
+              ) : (
+                recentIncidents.map((inc) => (
+                  <div
+                    key={inc.alarm_id}
+                    className={`incident-item ${statusClass(inc.status)}`}
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => setSelectedIncident(inc)}
+                    title="Click to view incident details"
+                  >
+                    <div className="incident-content">
+                      <div className="incident-header">
+                        <span className="incident-id">ALM-{inc.alarm_id}</span>
+                      </div>
+                      <h4>{inc.initial_alarm_level || 'Emergency Alarm'}</h4>
+                      <p className="incident-location">
+                        <i className="fa-solid fa-location-dot"></i>
+                        {inc.station_name ||
+                          (inc.user_latitude
+                            ? `${Number(inc.user_latitude).toFixed(4)}, ${Number(inc.user_longitude).toFixed(4)}`
+                            : 'Unknown location')}
+                      </p>
+                      <div className="incident-meta">
+                        <span className="reporter">{inc.full_name || 'Unknown caller'}</span>
+                        <span className="time">{timeAgo(inc.call_time)}</span>
+                      </div>
+                    </div>
+                    <div className="incident-actions">{statusBadge(inc.status)}</div>
+                  </div>
+                ))
+              )}
             </div>
-            <div className="call-meta">
-              <span className="badge pending">Pending</span>
-              <p className="call-time">Nov 3 — 3:42 PM</p>
+
+            <div className="section-footer">
+              <button className="load-more-btn">View All Incidents</button>
             </div>
           </div>
-
-          {/* Call 2 */}
-          <div className="call-item">
-            <div>
-              <p className="call-name">Maria Reyes</p>
-              <p className="call-type">Structural Fire</p>
-              <p className="call-location">Gov. Camins Ave</p>
-            </div>
-            <div className="call-meta">
-              <span className="badge responded">Responded</span>
-              <p className="call-time">Nov 5 — 10:24 AM</p>
-            </div>
-          </div>
-
-          <p className="no-more">No more recent calls</p>
         </div>
-
       </div>
+
+      {selectedIncident && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.45)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1100,
+            padding: 16,
+          }}
+          onClick={() => setSelectedIncident(null)}
+        >
+          <div
+            style={{
+              background: '#fff',
+              borderRadius: 12,
+              width: 'min(720px, 100%)',
+              maxHeight: '80vh',
+              overflowY: 'auto',
+              padding: 20,
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 style={{ marginTop: 0 }}>Incident Report ALM-{selectedIncident.alarm_id}</h3>
+            <p><strong>Caller:</strong> {selectedIncident.full_name || 'Unknown'}</p>
+            <p><strong>Phone:</strong> {selectedIncident.phone_number || 'N/A'}</p>
+            <p><strong>Location:</strong> {selectedIncident.location || 'Unknown'}</p>
+            <p><strong>Incident Type:</strong> {selectedIncident.incident_type || 'N/A'}</p>
+            <p><strong>Alarm Level:</strong> {selectedIncident.current_alarm_level || selectedIncident.initial_alarm_level || 'N/A'}</p>
+            <p><strong>Status:</strong> {selectedIncident.status || 'N/A'}</p>
+            <p><strong>Call Time:</strong> {selectedIncident.call_time ? new Date(selectedIncident.call_time).toLocaleString() : 'N/A'}</p>
+            <p><strong>Dispatch Time:</strong> {selectedIncident.dispatch_time ? new Date(selectedIncident.dispatch_time).toLocaleString() : 'N/A'}</p>
+            <p><strong>Resolved Time:</strong> {selectedIncident.resolve_time ? new Date(selectedIncident.resolve_time).toLocaleString() : 'N/A'}</p>
+            <p><strong>Narrative:</strong> {selectedIncident.narrative || 'No narrative'}</p>
+
+            <div style={{ marginTop: 16, textAlign: 'right' }}>
+              <button className="load-more-btn" onClick={() => setSelectedIncident(null)}>
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,28 +1,33 @@
-import React, { useState } from 'react';
+import React, { useState } from "react";
 import {
   View,
   Text,
   TextInput,
   TouchableOpacity,
   StyleSheet,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
-import * as Haptics from 'expo-haptics';
-import { API_URL } from '../../config';
-import { LocationPermissionModal } from '../../components/LocationPermissionModal';
-import { useAuth } from '../../context/AuthContext';
+  Alert,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
+import * as Haptics from "expo-haptics";
+import { API_URL } from "../../config";
+import { LocationPermissionModal } from "../../components/LocationPermissionModal";
+import { useAuth } from "../../context/AuthContext";
 
 export const LoginScreen = ({ navigation }) => {
-  const [phone, setPhone] = useState('');
-  const [password, setPassword] = useState('');
+  const [phone, setPhone] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const { login } = useAuth();
 
   const handleSignIn = async () => {
     if (!phone || !password) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      alert('Please enter your phone number and password.');
+      Alert.alert(
+        "Missing details",
+        "Please enter your phone number and password.",
+      );
       return;
     }
 
@@ -30,15 +35,21 @@ export const LoginScreen = ({ navigation }) => {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       const result = await login(phone, password);
       if (result.success) {
-        navigation.replace('MainTabs');
+        navigation.replace("MainTabs");
       } else {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-        alert(result.error || 'Login failed');
+        Alert.alert(
+          "Sign in failed",
+          result.error || "Please check your credentials and try again.",
+        );
       }
     } catch (error) {
-      console.error('Login error:', error);
+      console.error("Login error:", error);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      alert('Network or server error while logging in.');
+      Alert.alert(
+        "Connection error",
+        "Network or server issue while signing in. Please try again.",
+      );
     }
   };
 
@@ -46,11 +57,10 @@ export const LoginScreen = ({ navigation }) => {
     <View style={{ flex: 1 }}>
       {/* Background Gradient */}
       <LinearGradient
-        colors={['#7A001F', '#A30025', '#C9002F']}
+        colors={["#7A001F", "#A30025", "#C9002F"]}
         style={styles.gradient}
       >
-        <SafeAreaView style={{ flex: 1 }} edges={['top', 'left', 'right']}>
-          
+        <SafeAreaView style={{ flex: 1 }} edges={["top", "left", "right"]}>
           {/* TOP SECTION (Title + Circles) */}
           <View style={styles.topSection}>
             <Text style={styles.topTitle}>Welcome back!</Text>
@@ -64,7 +74,6 @@ export const LoginScreen = ({ navigation }) => {
 
           {/* BOTTOM WHITE CARD */}
           <View style={styles.card}>
-            
             {/* Phone Number (login via phone_number column) */}
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Phone Number</Text>
@@ -90,21 +99,39 @@ export const LoginScreen = ({ navigation }) => {
                   style={styles.input}
                   placeholder="Enter your password"
                   placeholderTextColor="#999"
-                  secureTextEntry
+                  secureTextEntry={!showPassword}
                   value={password}
                   onChangeText={setPassword}
                 />
+                <TouchableOpacity
+                  onPress={() => setShowPassword((current) => !current)}
+                  style={styles.passwordToggle}
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    showPassword ? "Hide password" : "Show password"
+                  }
+                >
+                  <Ionicons
+                    name={showPassword ? "eye-off-outline" : "eye-outline"}
+                    size={20}
+                    color="#666"
+                  />
+                </TouchableOpacity>
               </View>
             </View>
 
-            <TouchableOpacity style={styles.forgotPasswordBtn}>
+            {/* FORGOT PASSWORD */}
+            <TouchableOpacity
+              style={styles.forgotPasswordBtn}
+              onPress={() => navigation.navigate("ForgotPassword")}
+            >
               <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
             </TouchableOpacity>
 
             {/* SIGN IN BUTTON */}
             <TouchableOpacity style={styles.signInBtn} onPress={handleSignIn}>
               <LinearGradient
-                colors={['#A30025', '#7A001F']}
+                colors={["#A30025", "#7A001F"]}
                 style={styles.signInGradient}
               >
                 <Text style={styles.signInText}>SIGN IN</Text>
@@ -114,7 +141,7 @@ export const LoginScreen = ({ navigation }) => {
             {/* SIGN UP */}
             <View style={styles.signupRow}>
               <Text style={styles.signupText}>Don't have account? </Text>
-              <TouchableOpacity onPress={() => navigation.navigate('Register')}>
+              <TouchableOpacity onPress={() => navigation.navigate("Register")}>
                 <Text style={styles.signupLink}>Sign up</Text>
               </TouchableOpacity>
             </View>
@@ -209,13 +236,17 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#333",
   },
+  passwordToggle: {
+    marginLeft: 10,
+    paddingVertical: 4,
+  },
 
   forgotPasswordBtn: {
     alignSelf: "flex-end",
-    marginBottom: 18,
+    marginTop: 8,
   },
   forgotPasswordText: {
-    fontSize: 12,
+    fontSize: 13,
     color: "#A30025",
     fontWeight: "600",
   },
@@ -249,4 +280,3 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
 });
-

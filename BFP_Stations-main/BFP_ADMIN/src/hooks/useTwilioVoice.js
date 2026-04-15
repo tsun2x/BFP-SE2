@@ -1,7 +1,6 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { Device } from '@twilio/voice-sdk';
-
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+import { useState, useEffect, useRef, useCallback } from "react";
+import { Device } from "@twilio/voice-sdk";
+import { API_BASE } from "../utils/runtimeConfig";
 
 /**
  * useTwilioVoice — React hook that manages a Twilio Voice Device.
@@ -13,30 +12,67 @@ const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000';
  */
 export default function useTwilioVoice(identity, authToken, options = {}) {
   const [device, setDevice] = useState(null);
-  const [status, setStatus] = useState('offline'); // offline | registering | ready | busy
+  const [status, setStatus] = useState("offline"); // offline | registering | ready | busy
   const [activeCall, setActiveCall] = useState(null);
   const [incomingCall, setIncomingCall] = useState(null);
   const [error, setError] = useState(null);
   const deviceRef = useRef(null);
 
+  const ensureMicrophoneAccess = useCallback(async () => {
+    if (!navigator?.mediaDevices?.getUserMedia) return;
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    try {
+      stream.getTracks().forEach((t) => t.stop());
+    } catch (_) {
+      // ignore cleanup errors
+    }
+  }, []);
+
+  const forceUnmuteCall = useCallback((call) => {
+    try {
+      if (call && typeof call.mute === "function") {
+        call.mute(false);
+      }
+    } catch (_) {
+      // ignore if SDK/audio state does not support explicit unmute
+    }
+  }, []);
+
   // ── Fetch Twilio access token from backend ────────────────────────
   const fetchToken = useCallback(async () => {
-    if (!identity || !authToken) return null;
+    if (!identity || !authToken) {
+      console.warn(
+        "[TwilioVoice] fetchToken skipped — identity:",
+        identity,
+        "authToken:",
+        !!authToken,
+      );
+      return null;
+    }
     try {
-      // NOTE: VITE_API_URL already points to /api, so we call /twilio/token here
+      console.log(
+        `[TwilioVoice] Fetching token from ${API_BASE}/twilio/token for identity=${identity}`,
+      );
       const res = await fetch(`${API_BASE}/twilio/token`, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
           Authorization: `Bearer ${authToken}`,
         },
         body: JSON.stringify({ identity }),
       });
-      if (!res.ok) throw new Error(`Token request failed: ${res.status}`);
+      if (!res.ok) {
+        const errBody = await res.text();
+        console.error(
+          `[TwilioVoice] Token request failed: ${res.status}`,
+          errBody,
+        );
+        throw new Error(`Token request failed: ${res.status} — ${errBody}`);
+      }
       const data = await res.json();
       return data.token;
     } catch (err) {
-      console.error('[TwilioVoice] Token fetch error:', err);
+      console.error("[TwilioVoice] Token fetch error:", err);
       setError(err.message);
       return null;
     }
@@ -49,44 +85,91 @@ export default function useTwilioVoice(identity, authToken, options = {}) {
     let cancelled = false;
 
     const init = async () => {
-      setStatus('registering');
+      setStatus("registering");
       const token = await fetchToken();
-      if (!token || cancelled) return;
+      if (cancelled) return;
+      if (!token) {
+        console.error(
+          "[TwilioVoice] Failed to fetch token — cannot register device",
+        );
+        setStatus("offline");
+        setError("Failed to fetch Twilio token");
+        return;
+      }
+
+      try {
+        await ensureMicrophoneAccess();
+      } catch (err) {
+        const msg =
+          err?.name === "NotFoundError"
+            ? "No microphone device found. Connect/enable a microphone and allow browser microphone access."
+            : err?.message || String(err);
+        console.error("[TwilioVoice] Microphone preflight failed:", err);
+        if (!cancelled) {
+          setError(msg);
+          setStatus("offline");
+        }
+        return;
+      }
 
       try {
         const dev = new Device(token, {
           logLevel: 1,
-          codecPreferences: ['opus', 'pcmu'],
+          codecPreferences: ["opus", "pcmu"],
         });
 
-        dev.on('registered', () => {
+        dev.on("registered", async () => {
+          try {
+            dev.audio?.speakerDevices?.set?.("default");
+            dev.audio?.ringtoneDevices?.set?.("default");
+          } catch (_) {
+            // ignore audio-device selection failures
+          }
+          // Explicitly set input device (microphone) so the browser captures audio
+          try {
+            if (dev.audio && typeof dev.audio.setInputDevice === "function") {
+              await dev.audio.setInputDevice("default");
+              console.log("[TwilioVoice] Input device set to default");
+            }
+          } catch (audioErr) {
+            console.warn("[TwilioVoice] Could not set input device:", audioErr?.message || audioErr);
+          }
           console.log(`[TwilioVoice] Device registered as ${identity}`);
-          if (!cancelled) setStatus('ready');
+          if (!cancelled) setStatus("ready");
         });
 
-        dev.on('error', (err) => {
-          console.error('[TwilioVoice] Device error:', err);
+        dev.on("error", (err) => {
+          console.error("[TwilioVoice] Device error:", err);
           if (!cancelled) setError(err.message || String(err));
         });
 
-        dev.on('incoming', (call) => {
-          const callTo = call.parameters.To || '';
-          console.log(`[TwilioVoice] Incoming call from: ${call.parameters.From}, To: ${callTo}, myIdentity: client:${identity}`);
+        dev.on("incoming", (call) => {
+          const callTo = call.parameters.To || "";
+          console.log(
+            `[TwilioVoice] Incoming call from: ${call.parameters.From}, To: ${callTo}, myIdentity: client:${identity}`,
+          );
           // Reject calls not addressed to this identity (prevents bleed across browser tabs)
-          if (callTo && callTo !== `client:${identity}`) {
-            console.warn(`[TwilioVoice] Rejecting misrouted call (To=${callTo}, expected client:${identity})`);
-            try { call.reject(); } catch (_) {}
+          // Twilio may send To as either "client:IDENTITY" or "IDENTITY" depending on SDK/webhook params.
+          const expectedA = `client:${identity}`;
+          const expectedB = `${identity}`;
+          if (callTo && callTo !== expectedA && callTo !== expectedB) {
+            console.warn(
+              `[TwilioVoice] Rejecting misrouted call (To=${callTo}, expected ${expectedA} or ${expectedB})`,
+            );
+            try {
+              call.reject();
+            } catch (_) {}
             return;
           }
           if (!cancelled) {
             setIncomingCall(call);
-            setStatus('busy');
+            setStatus("busy");
             if (options.onIncomingCall) options.onIncomingCall(call);
           }
         });
 
-        dev.on('tokenWillExpire', async () => {
-          console.log('[TwilioVoice] Token expiring, refreshing…');
+        dev.on("tokenWillExpire", async () => {
+          console.log("[TwilioVoice] Token expiring, refreshing…");
           const newToken = await fetchToken();
           if (newToken && !cancelled) dev.updateToken(newToken);
         });
@@ -97,10 +180,10 @@ export default function useTwilioVoice(identity, authToken, options = {}) {
           setDevice(dev);
         }
       } catch (err) {
-        console.error('[TwilioVoice] Init error:', err);
+        console.error("[TwilioVoice] Init error:", err);
         if (!cancelled) {
           setError(err.message);
-          setStatus('offline');
+          setStatus("offline");
         }
       }
     };
@@ -114,65 +197,86 @@ export default function useTwilioVoice(identity, authToken, options = {}) {
         deviceRef.current = null;
       }
       setDevice(null);
-      setStatus('offline');
+      setStatus("offline");
     };
   }, [identity, authToken]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Make outbound call ────────────────────────────────────────────
-  const makeCall = useCallback(async (toIdentityOrNumber) => {
-    if (!deviceRef.current) {
-      setError('Device not ready');
-      return null;
-    }
-    try {
-      const call = await deviceRef.current.connect({
-        params: { To: toIdentityOrNumber },
-      });
+  const makeCall = useCallback(
+    async (toIdentityOrNumber) => {
+      if (!deviceRef.current) {
+        setError("Device not ready");
+        return null;
+      }
+      try {
+        await ensureMicrophoneAccess();
+        const call = await deviceRef.current.connect({
+          params: { To: toIdentityOrNumber },
+        });
 
-      call.on('accept', () => setStatus('busy'));
-      call.on('disconnect', () => {
-        setActiveCall(null);
-        setStatus('ready');
-        if (options.onCallDisconnected) options.onCallDisconnected(call);
-      });
-      call.on('cancel', () => {
-        setActiveCall(null);
-        setStatus('ready');
-      });
+        call.on("accept", () => {
+          forceUnmuteCall(call);
+          setStatus("busy");
+        });
+        call.on("disconnect", () => {
+          setActiveCall(null);
+          setStatus("ready");
+          if (options.onCallDisconnected) options.onCallDisconnected(call);
+        });
+        call.on("cancel", () => {
+          setActiveCall(null);
+          setStatus("ready");
+        });
 
-      setActiveCall(call);
-      setStatus('busy');
-      return call;
-    } catch (err) {
-      console.error('[TwilioVoice] makeCall error:', err);
-      setError(err.message);
-      return null;
-    }
-  }, [options]);
+        setActiveCall(call);
+        setStatus("busy");
+        return call;
+      } catch (err) {
+        console.error("[TwilioVoice] makeCall error:", err);
+        setError(err.message);
+        return null;
+      }
+    },
+    [options, ensureMicrophoneAccess, forceUnmuteCall],
+  );
 
   // ── Accept incoming call ──────────────────────────────────────────
-  const acceptIncoming = useCallback(() => {
+  const acceptIncoming = useCallback(async () => {
     if (!incomingCall) return;
-    incomingCall.accept();
+    try {
+      await ensureMicrophoneAccess();
+      incomingCall.accept();
+      forceUnmuteCall(incomingCall);
+    } catch (err) {
+      console.error("[TwilioVoice] acceptIncoming error:", err);
+      setError(
+        err?.name === "NotFoundError"
+          ? "No microphone device found. Connect/enable a microphone and allow browser microphone access."
+          : err?.message || String(err),
+      );
+      setIncomingCall(null);
+      setStatus("ready");
+      return;
+    }
 
-    incomingCall.on('disconnect', () => {
+    incomingCall.on("disconnect", () => {
       setActiveCall(null);
       setIncomingCall(null);
-      setStatus('ready');
+      setStatus("ready");
       if (options.onCallDisconnected) options.onCallDisconnected(incomingCall);
     });
 
     setActiveCall(incomingCall);
     setIncomingCall(null);
-    setStatus('busy');
-  }, [incomingCall, options]);
+    setStatus("busy");
+  }, [incomingCall, options, ensureMicrophoneAccess, forceUnmuteCall]);
 
   // ── Reject incoming call ──────────────────────────────────────────
   const rejectIncoming = useCallback(() => {
     if (!incomingCall) return;
     incomingCall.reject();
     setIncomingCall(null);
-    setStatus('ready');
+    setStatus("ready");
   }, [incomingCall]);
 
   // ── Hang up active call ───────────────────────────────────────────
@@ -180,7 +284,7 @@ export default function useTwilioVoice(identity, authToken, options = {}) {
     if (activeCall) {
       activeCall.disconnect();
       setActiveCall(null);
-      setStatus('ready');
+      setStatus("ready");
     }
   }, [activeCall]);
 

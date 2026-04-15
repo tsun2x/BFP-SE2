@@ -1,26 +1,36 @@
 import { NavLink, useNavigate } from "react-router-dom";
-import "../style/navbar.css";
+import "../style/sidebar.css";
+import { useAuth } from "../context/AuthContext";
 
 export default function Sidebar() {
   const navigate = useNavigate();
+  const { logout, user } = useAuth();
 
-  const handleLogout = () => {
-    // clear session (optional)
-    // localStorage.removeItem("user");
+  const stationName =
+    user?.stationInfo?.station_name ||
+    user?.station_name ||
+    user?.substation ||
+    user?.station ||
+    "Zamboanga Central\nFire Station";
 
+  const handleLogout = async () => {
+    await logout();
     navigate("/login");
   };
 
   return (
     <aside className="sidebar">
-
       {/* Logo / Avatar */}
-      <div className="station-name">BFP<br />Super Admin</div>
+      <div className="station-name">{stationName}</div>
 
       {/* MAIN NAVIGATION */}
       <nav className="nav">
         <NavLink to="/" className="nav-item">
           <i className="fa-solid fa-chart-line"></i> Dashboard
+        </NavLink>
+
+        <NavLink to="/past-incidents" className="nav-item">
+          <i className="fa-solid fa-clock-rotate-left"></i> Past Incidents
         </NavLink>
 
         <NavLink to="/reports" className="nav-item">
@@ -60,17 +70,12 @@ export default function Sidebar() {
         <NavLink to="/settings" className="nav-item">
           <i className="fa-solid fa-gear"></i> Settings
         </NavLink>
-
-        <NavLink to="/test" className="nav-item">
-          <i className="fa-solid fa-phone-volume"></i> VoIP Test
-        </NavLink>
       </nav>
 
       {/* LOGOUT BUTTON */}
       <button className="logout-btn" onClick={handleLogout}>
         Log Out
       </button>
-
     </aside>
   );
 }

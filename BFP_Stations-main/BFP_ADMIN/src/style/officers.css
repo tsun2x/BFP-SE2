@@ -34,13 +34,29 @@
   gap: 25px;
 }
 
+/* SEARCH INPUT WRAPPER */
+.search-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 260px;
+}
 
+.search-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 16px;
+  color: #dc2626;
+  z-index: 1;
+}
 
 /* SEARCH INPUT */
 .officer-search-input {
-  width: 260px;
+  width: 100%;
   height: 42px;
-  padding: 10px 14px;
+  padding: 10px 14px 10px 40px;
   border: 1px solid #ccc;
   border-radius: 8px;
   font-size: 14px;
@@ -92,14 +108,84 @@
 
 
 /* -------------------------------------- */
+/* SEPARATED STATION CONTAINERS */
+/* -------------------------------------- */
+.station-container {
+  border: 2px solid #e0e0e0;
+  border-radius: 10px;
+  padding: 20px;
+  margin-bottom: 24px;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.station-header-label {
+  border: 2px solid #c1121f;
+  padding: 6px 16px;
+  border-radius: 8px;
+  font-weight: 600;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: #c1121f;
+  background: #fff;
+  display: inline-block;
+  margin-bottom: 16px;
+  font-size: 14px;
+}
+
+.station-table-container {
+  border: 2px solid #e0e0e0;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.officer-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+}
+
+.table-header-row {
+  background: #c1121f;
+  color: #fff;
+}
+
+.table-header-row th {
+  padding: 12px 16px;
+  text-align: left;
+  font-weight: 600;
+  font-size: 14px;
+  border: none;
+}
+
+.table-data-row {
+  border-bottom: 1px solid #f0f0f0;
+  transition: background-color 0.2s ease;
+}
+
+.table-data-row:hover {
+  background-color: #f8f8f8;
+}
+
+.table-data-row:last-child {
+  border-bottom: none;
+}
+
+.table-data-row td {
+  padding: 14px 16px;
+  vertical-align: middle;
+  font-size: 14px;
+  border: none;
+}
+
+/* -------------------------------------- */
 /* TABLE CARD */
 /* -------------------------------------- */
 .officer-table-card {
   background: #fff;
-  border-radius: 14px;
+  border-radius: 10px;
   overflow: hidden;
   box-shadow: 0px 2px 6px rgba(0,0,0,0.08);
-  border: 2px solid #B22222; /* same theme orange */
 }
 
 

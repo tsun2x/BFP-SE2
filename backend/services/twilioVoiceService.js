@@ -1,4 +1,9 @@
-import twilioClient from '../config/twilioClient.js';
+import twilio from 'twilio';
+
+const twilioClient = twilio(
+  process.env.TWILIO_ACCOUNT_SID,
+  process.env.TWILIO_AUTH_TOKEN,
+);
 
 /**
  * Make an outbound incident call using Twilio.

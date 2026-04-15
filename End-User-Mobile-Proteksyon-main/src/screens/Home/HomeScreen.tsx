@@ -15,28 +15,37 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { LocationPermissionModal } from '../../components/LocationPermissionModal';
+import { NODE_API_URL } from '../../config';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useUiPreferences } from '../../context/UiPreferencesContext';
+import { useAuth } from '../../context/AuthContext';
 
-const featuredNews = [
-  {
-    id: '1',
-    title: '3-Alarm Fire Controlled in ZC',
-    date: 'October 08, 2025',
-    imageUrl: 'https://via.placeholder.com/600x300',
-  },
-  {
-    id: '2',
-    title: 'Kitchen Fire Contained in San Pedro Residence',
-    date: 'October 15, 2025',
-    imageUrl: 'https://via.placeholder.com/600x300',
-  },
-];
+
 
 export const HomeScreen: React.FC = () => {
   const navigation = useNavigation<any>();
+  const { fontScale, palette } = useUiPreferences();
+  const { logout } = useAuth();
   const [showHamburgerMenu, setShowHamburgerMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [hasUnreadNotifications, setHasUnreadNotifications] = useState(true);
   const [showLocationModal, setShowLocationModal] = useState(false);
+  const [featuredNews, setFeaturedNews] = useState<any[]>([]);
+
+  // Fetch live news from backend
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch(`${NODE_API_URL}/api/public/news`, {
+          headers: { 'ngrok-skip-browser-warning': 'true' },
+        });
+        const json = await res.json();
+        if (json.success) setFeaturedNews((json.data || []).slice(0, 3));
+      } catch (e) {
+        console.error('[Home] news fetch error:', e);
+      }
+    })();
+  }, []);
 
   // Show location modal when dashboard first loads
   useEffect(() => {
@@ -52,11 +61,8 @@ export const HomeScreen: React.FC = () => {
     setShowHamburgerMenu(false);
     
     switch(item) {
-      case 'profile':
-        navigation.navigate('Profile');
-        break;
       case 'settings':
-        Alert.alert('Settings', 'Settings screen coming soon!');
+        navigation.navigate('Settings');
         break;
       case 'help':
         navigation.navigate('Help');
@@ -73,7 +79,13 @@ export const HomeScreen: React.FC = () => {
           'Are you sure you want to logout?',
           [
             { text: 'Cancel', style: 'cancel' },
-            { text: 'Logout', onPress: () => navigation.replace('Login') }
+            {
+              text: 'Logout',
+              onPress: () => {
+                logout();
+                navigation.replace('Login');
+              },
+            }
           ]
         );
         break;
@@ -82,6 +94,7 @@ export const HomeScreen: React.FC = () => {
 
   const handleNotificationPress = (notification: any) => {
     setShowNotifications(false);
+    setHasUnreadNotifications(false);
     Alert.alert('Notification', notification.message);
   };
 
@@ -102,8 +115,8 @@ export const HomeScreen: React.FC = () => {
   ];
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <ScrollView style={styles.scrollView}>
+    <SafeAreaView style={[styles.container, { backgroundColor: palette.pageBg }]} edges={['top']}>
+      <ScrollView style={[styles.scrollView, { backgroundColor: palette.pageBg }]}>
         {/* Hero Section with Header */}
         <View style={styles.heroWrapper}>
           <LinearGradient
@@ -128,10 +141,13 @@ export const HomeScreen: React.FC = () => {
                 <View style={styles.rightHeaderContainer}>
                   <TouchableOpacity 
                     style={styles.notificationButton}
-                    onPress={() => setShowNotifications(true)}
+                    onPress={() => {
+                      setShowNotifications(true);
+                      setHasUnreadNotifications(false);
+                    }}
                   >
                     <Ionicons name="notifications" size={22} color="#fff" />
-                    <View style={styles.notificationDot} />
+                    {hasUnreadNotifications && <View style={styles.notificationDot} />}
                   </TouchableOpacity>
                   
                   {/* Mini Logo */}
@@ -147,15 +163,15 @@ export const HomeScreen: React.FC = () => {
 
               {/* Hero Title */}
               <View style={styles.heroTextBlock}>
-                <Text style={styles.heroTitle}>Proteksyon</Text>
-                <Text style={styles.heroSubtitle}>BFP Emergency Response App</Text>
+                <Text style={[styles.heroTitle, { fontSize: 28 * fontScale }]}>Proteksyon</Text>
+                <Text style={[styles.heroSubtitle, { fontSize: 14 * fontScale }]}>BFP Emergency Response App</Text>
               </View>
 
               {/* Search bar */}
               <View style={styles.searchContainer}>
                 <Ionicons name="search" size={18} color="#999" style={styles.searchIcon} />
                 <TextInput
-                  style={styles.searchInput}
+                  style={[styles.searchInput, { fontSize: 14 * fontScale }]}
                   placeholder="Search emergency services..."
                   placeholderTextColor="#999"
                 />
@@ -167,18 +183,18 @@ export const HomeScreen: React.FC = () => {
         {/* Firetruck Tracking Section */}
         <View style={styles.sectionWrapper}>
           <View style={styles.sectionHeaderRow}>
-            <Text style={styles.sectionTitle}>FIRETRUCK TRACKING</Text>
+            <Text style={[styles.sectionTitle, { color: palette.textPrimary, fontSize: 16 * fontScale }]}>FIRETRUCK TRACKING</Text>
             <Ionicons name="location" size={16} color="#E53935" style={styles.sectionIcon} />
           </View>
           
           <TouchableOpacity
-            style={styles.mapPlaceholder}
-            onPress={() => navigation.navigate('FireTruckTracking')}
+            style={[styles.mapPlaceholder, { backgroundColor: palette.cardBg }]}
+            onPress={() => navigation.navigate('MapScreen')}
           >
-            <View style={styles.mapContent}>
+            <View style={[styles.mapContent, { backgroundColor: darkenOrLighten(palette.pageBg, 0.06) }]}>
               <Ionicons name="map" size={48} color="#ccc" />
-              <Text style={styles.mapText}>Live Firetruck Tracking</Text>
-              <Text style={styles.mapSubtext}>Monitor emergency vehicles in real-time</Text>
+              <Text style={[styles.mapText, { color: palette.textSecondary, fontSize: 16 * fontScale }]}>Live Firetruck Tracking</Text>
+              <Text style={[styles.mapSubtext, { color: palette.textSecondary, fontSize: 12 * fontScale }]}>Monitor emergency vehicles in real-time</Text>
               
               {/* Mock firetruck positions */}
               <View style={styles.firetruckMarker}>
@@ -194,26 +210,26 @@ export const HomeScreen: React.FC = () => {
         {/* Recent News Section */}
         <View style={styles.sectionWrapper}>
           <View style={styles.sectionHeaderRow}>
-            <Text style={styles.sectionTitle}>RECENT NEWS</Text>
+            <Text style={[styles.sectionTitle, { color: palette.textPrimary, fontSize: 16 * fontScale }]}>RECENT NEWS</Text>
             <Ionicons name="newspaper" size={16} color="#FFB300" style={styles.sectionIcon} />
           </View>
 
           {featuredNews.map((news) => (
             <TouchableOpacity
               key={news.id}
-              style={styles.newsCard}
+              style={[styles.newsCard, { backgroundColor: palette.cardBg }]}
               onPress={() => navigation.navigate('Article', { articleId: news.id })}
             >
               <Image
-                source={{ uri: news.imageUrl }}
+                source={(news.heading_image || news.headline_image) ? { uri: news.heading_image || news.headline_image } : { uri: 'https://via.placeholder.com/600x300' }}
                 style={styles.newsImage}
                 resizeMode="cover"
               />
               <View style={styles.newsTextBlock}>
-                <Text style={styles.newsTitle} numberOfLines={2}>
+                <Text style={[styles.newsTitle, { color: palette.textPrimary, fontSize: 14 * fontScale }]} numberOfLines={2}>
                   {news.title}
                 </Text>
-                <Text style={styles.newsDate}>{news.date}</Text>
+                <Text style={[styles.newsDate, { color: palette.textSecondary, fontSize: 12 * fontScale }]}>{news.published_at ? new Date(news.published_at).toLocaleDateString('en-US', { month: 'long', day: '2-digit', year: 'numeric' }) : ''}</Text>
               </View>
             </TouchableOpacity>
           ))}
@@ -222,49 +238,49 @@ export const HomeScreen: React.FC = () => {
         {/* Quick Actions */}
         <View style={styles.sectionWrapper}>
           <View style={styles.sectionHeaderRow}>
-            <Text style={styles.sectionTitle}>QUICK ACTIONS</Text>
+            <Text style={[styles.sectionTitle, { color: palette.textPrimary, fontSize: 16 * fontScale }]}>QUICK ACTIONS</Text>
             <Ionicons name="flash" size={16} color="#E53935" style={styles.sectionIcon} />
           </View>
           
           <View style={styles.quickActionsGrid}>
             <TouchableOpacity 
-              style={styles.quickActionCard}
+              style={[styles.quickActionCard, { backgroundColor: palette.cardBg }]}
               onPress={() => navigation.navigate('FireSafetyTips')}
             >
               <View style={styles.quickActionIcon}>
                 <Ionicons name="shield-checkmark" size={24} color="#fff" />
               </View>
-              <Text style={styles.quickActionText}>Safety Tips</Text>
+              <Text style={[styles.quickActionText, { color: palette.textPrimary, fontSize: 12 * fontScale }]}>Safety Tips</Text>
             </TouchableOpacity>
             
             <TouchableOpacity 
-              style={styles.quickActionCard}
-              onPress={() => navigation.navigate('FireTruckTracking')}
+              style={[styles.quickActionCard, { backgroundColor: palette.cardBg }]}
+              onPress={() => navigation.navigate('MapScreen')}
             >
               <View style={styles.quickActionIcon}>
                 <Ionicons name="location" size={24} color="#fff" />
               </View>
-              <Text style={styles.quickActionText}>Live Tracking</Text>
+              <Text style={[styles.quickActionText, { color: palette.textPrimary, fontSize: 12 * fontScale }]}>Live Tracking</Text>
             </TouchableOpacity>
             
             <TouchableOpacity 
-              style={styles.quickActionCard}
+              style={[styles.quickActionCard, { backgroundColor: palette.cardBg }]}
               onPress={() => navigation.navigate('NewsRoom')}
             >
               <View style={styles.quickActionIcon}>
                 <Ionicons name="newspaper" size={24} color="#fff" />
               </View>
-              <Text style={styles.quickActionText}>News Room</Text>
+              <Text style={[styles.quickActionText, { color: palette.textPrimary, fontSize: 12 * fontScale }]}>News Room</Text>
             </TouchableOpacity>
             
             <TouchableOpacity 
-              style={styles.quickActionCard}
+              style={[styles.quickActionCard, { backgroundColor: palette.cardBg }]}
               onPress={() => navigation.navigate('EmergencyHotlines')}
             >
               <View style={styles.quickActionIcon}>
                 <Ionicons name="call" size={24} color="#fff" />
               </View>
-              <Text style={styles.quickActionText}>Emergency Contacts</Text>
+              <Text style={[styles.quickActionText, { color: palette.textPrimary, fontSize: 12 * fontScale }]}>Emergency Contacts</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -274,7 +290,7 @@ export const HomeScreen: React.FC = () => {
       <Modal
         visible={showHamburgerMenu}
         transparent={true}
-        animationType="slide"
+        animationType="fade"
         onRequestClose={() => setShowHamburgerMenu(false)}
       >
         <TouchableOpacity 
@@ -282,32 +298,27 @@ export const HomeScreen: React.FC = () => {
           activeOpacity={1}
           onPress={() => setShowHamburgerMenu(false)}
         >
-          <View style={styles.hamburgerMenu}>
+          <View style={[styles.hamburgerMenu, { backgroundColor: palette.cardBg }]}> 
             <View style={styles.hamburgerHeader}>
-              <Text style={styles.hamburgerTitle}>Menu</Text>
+              <Text style={[styles.hamburgerTitle, { color: palette.textPrimary, fontSize: 20 * fontScale }]}>Menu</Text>
               <TouchableOpacity onPress={() => setShowHamburgerMenu(false)}>
-                <Ionicons name="close" size={24} color="#333" />
+                <Ionicons name="close" size={24} color={palette.textPrimary} />
               </TouchableOpacity>
             </View>
             
-            <TouchableOpacity style={styles.menuItem} onPress={() => handleHamburgerMenu('profile')}>
-              <Ionicons name="person" size={20} color="#555" />
-              <Text style={styles.menuItemText}>Profile</Text>
-            </TouchableOpacity>
-            
             <TouchableOpacity style={styles.menuItem} onPress={() => handleHamburgerMenu('settings')}>
-              <Ionicons name="settings" size={20} color="#555" />
-              <Text style={styles.menuItemText}>Settings</Text>
+              <Ionicons name="settings" size={20} color={palette.textSecondary} />
+              <Text style={[styles.menuItemText, { color: palette.textPrimary, fontSize: 16 * fontScale }]}>Settings</Text>
             </TouchableOpacity>
             
             <TouchableOpacity style={styles.menuItem} onPress={() => handleHamburgerMenu('help')}>
-              <Ionicons name="help-circle" size={20} color="#555" />
-              <Text style={styles.menuItemText}>Help & FAQ</Text>
+              <Ionicons name="help-circle" size={20} color={palette.textSecondary} />
+              <Text style={[styles.menuItemText, { color: palette.textPrimary, fontSize: 16 * fontScale }]}>Help & FAQ</Text>
             </TouchableOpacity>
             
             <TouchableOpacity style={styles.menuItem} onPress={() => handleHamburgerMenu('about')}>
-              <Ionicons name="information-circle" size={20} color="#555" />
-              <Text style={styles.menuItemText}>About BFP</Text>
+              <Ionicons name="information-circle" size={20} color={palette.textSecondary} />
+              <Text style={[styles.menuItemText, { color: palette.textPrimary, fontSize: 16 * fontScale }]}>About BFP</Text>
             </TouchableOpacity>
             
             <View style={styles.menuDivider} />
@@ -332,11 +343,11 @@ export const HomeScreen: React.FC = () => {
           activeOpacity={1}
           onPress={() => setShowNotifications(false)}
         >
-          <View style={styles.notificationDropdown}>
+          <View style={[styles.notificationDropdown, { backgroundColor: palette.cardBg }]}>
             <View style={styles.notificationHeader}>
-              <Text style={styles.notificationTitle}>Notifications</Text>
+              <Text style={[styles.notificationTitle, { color: palette.textPrimary, fontSize: 16 * fontScale }]}>Notifications</Text>
               <TouchableOpacity onPress={() => setShowNotifications(false)}>
-                <Ionicons name="close" size={20} color="#333" />
+                <Ionicons name="close" size={20} color={palette.textPrimary} />
               </TouchableOpacity>
             </View>
             
@@ -350,8 +361,8 @@ export const HomeScreen: React.FC = () => {
                   <Ionicons name="notifications" size={16} color="#E53935" />
                 </View>
                 <View style={styles.notificationContent}>
-                  <Text style={styles.notificationMessage}>{notification.message}</Text>
-                  <Text style={styles.notificationTime}>{notification.time}</Text>
+                  <Text style={[styles.notificationMessage, { color: palette.textPrimary, fontSize: 13 * fontScale }]}>{notification.message}</Text>
+                  <Text style={[styles.notificationTime, { color: palette.textSecondary, fontSize: 11 * fontScale }]}>{notification.time}</Text>
                 </View>
               </TouchableOpacity>
             ))}
@@ -368,6 +379,17 @@ export const HomeScreen: React.FC = () => {
       />
     </SafeAreaView>
   );
+};
+
+const darkenOrLighten = (hex: string, amount: number) => {
+  const normalized = hex.replace('#', '');
+  if (normalized.length !== 6) return '#f0f0f0';
+  const clamp = (n: number) => Math.max(0, Math.min(255, n));
+  const r = parseInt(normalized.slice(0, 2), 16);
+  const g = parseInt(normalized.slice(2, 4), 16);
+  const b = parseInt(normalized.slice(4, 6), 16);
+  const delta = Math.round(255 * amount);
+  return `rgb(${clamp(r + delta)}, ${clamp(g + delta)}, ${clamp(b + delta)})`;
 };
 
 const styles = StyleSheet.create({

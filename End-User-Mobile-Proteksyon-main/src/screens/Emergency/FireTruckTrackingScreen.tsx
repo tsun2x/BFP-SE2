@@ -71,18 +71,6 @@ export const FireTruckTrackingScreen: React.FC = () => {
             <Ionicons name="map" size={48} color="#ccc" />
             <Text style={styles.mapText}>Live Firetruck Tracking</Text>
             <Text style={styles.mapSubtext}>Monitor emergency vehicles in real-time</Text>
-
-            <View style={styles.firetruckMarker}>
-              <Ionicons name="car" size={16} color="#fff" />
-            </View>
-
-            <View style={[styles.firetruckMarker, styles.truck2]}>
-              <Ionicons name="car" size={16} color="#fff" />
-            </View>
-
-            <View style={[styles.firetruckMarker, styles.ambulance]}>
-              <Ionicons name="medkit" size={16} color="#fff" />
-            </View>
           </View>
         </View>
 
@@ -92,52 +80,6 @@ export const FireTruckTrackingScreen: React.FC = () => {
           <Text style={styles.updateText}>Updated just now</Text>
         </View>
 
-        {/* VEHICLE LIST */}
-        <View style={styles.vehicleList}>
-          <Text style={styles.listTitle}>Available Trucks</Text>
-
-          {/* CARD 1 */}
-          <TouchableOpacity style={styles.vehicleCard}>
-            <View style={styles.vehicleIcon}>
-              <Ionicons name="car" size={24} color="#E53935" />
-            </View>
-            <View style={styles.vehicleInfo}>
-              <Text style={styles.vehicleName}>Fire Truck #1</Text>
-              <Text style={styles.vehicleStatus}>Responding to emergency</Text>
-            </View>
-            <View style={styles.vehicleDistance}>
-              <Text style={styles.distanceText}>2.3 km</Text>
-            </View>
-          </TouchableOpacity>
-
-          {/* CARD 2 */}
-          <TouchableOpacity style={styles.vehicleCard}>
-            <View style={styles.vehicleIcon}>
-              <Ionicons name="car" size={24} color="#E53935" />
-            </View>
-            <View style={styles.vehicleInfo}>
-              <Text style={styles.vehicleName}>Fire Truck #2</Text>
-              <Text style={styles.vehicleStatus}>En route to scene</Text>
-            </View>
-            <View style={styles.vehicleDistance}>
-              <Text style={styles.distanceText}>4.7 km</Text>
-            </View>
-          </TouchableOpacity>
-
-          {/* CARD 3 */}
-          <TouchableOpacity style={styles.vehicleCard}>
-            <View style={styles.vehicleIcon}>
-              <Ionicons name="medkit" size={24} color="#E53935" />
-            </View>
-            <View style={styles.vehicleInfo}>
-              <Text style={styles.vehicleName}>Ambulance #1</Text>
-              <Text style={styles.vehicleStatus}>Transporting patient</Text>
-            </View>
-            <View style={styles.vehicleDistance}>
-              <Text style={styles.distanceText}>1.8 km</Text>
-            </View>
-          </TouchableOpacity>
-        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -217,25 +159,6 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
 
-  firetruckMarker: {
-    position: 'absolute',
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#E53935',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  truck2: {
-    top: '30%',
-    left: '70%',
-    backgroundColor: '#FF9800',
-  },
-  ambulance: {
-    bottom: '20%',
-    right: '25%',
-    backgroundColor: '#2196F3',
-  },
 
   statusBar: {
     flexDirection: 'row',
@@ -265,67 +188,5 @@ const styles = StyleSheet.create({
     color: '#666',
   },
 
-  vehicleList: {
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 30,
-  },
-
-  listTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#333',
-    marginBottom: 12,
-  },
-
-  vehicleCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    padding: 16,
-    borderRadius: 8,
-    marginBottom: 10,
-
-    shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    shadowOffset: { width: 0, height: 1 },
-    elevation: 2,
-  },
-
-  vehicleIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#ffebee',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-
-  vehicleInfo: {
-    flex: 1,
-    marginLeft: 12,
-  },
-
-  vehicleName: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#333',
-  },
-
-  vehicleStatus: {
-    fontSize: 14,
-    color: '#666',
-  },
-
-  vehicleDistance: {
-    alignItems: 'flex-end',
-  },
-
-  distanceText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#E53935',
-  },
 });
 

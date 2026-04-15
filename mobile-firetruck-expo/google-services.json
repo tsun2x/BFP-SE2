@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "25742363144",
+    "project_id": "fluer-bfp",
+    "storage_bucket": "fluer-bfp.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:25742363144:android:4c237faef4cb4bf5a55fbd",
+        "android_client_info": {
+          "package_name": "com.bfp.mobilefiretruckexpo"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCcTGrneQAxybTvYjhstTvEvrK2nd43w44"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:25742363144:android:3a98b617cb633a66a55fbd",
+        "android_client_info": {
+          "package_name": "com.tsun2x.mobilecivilianexpoclean"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCcTGrneQAxybTvYjhstTvEvrK2nd43w44"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

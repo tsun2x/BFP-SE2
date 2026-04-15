@@ -1,4 +1,6 @@
-import { createContext, useState, useEffect, useContext } from "react";
+import { createContext, useState, useEffect, useContext } from 'react';
+import apiClient from '../utils/apiClient';
+import { API_BASE } from '../utils/runtimeConfig';
 
 export const AuthContext = createContext();
 
@@ -12,18 +14,21 @@ export function useAuth() {
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
+  const [token, setToken] = useState(() => localStorage.getItem('authToken'));
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const token = localStorage.getItem("authToken");
+    const token = localStorage.getItem('authToken');
     if (token) {
       verifyToken(token)
         .then((userData) => {
           if (userData) {
             setUser(userData);
             setIsAuthenticated(true);
-            try { localStorage.setItem('user', JSON.stringify(userData)); } catch (e) {}
+            try {
+              localStorage.setItem('user', JSON.stringify(userData));
+            } catch (e) {}
           } else {
             localStorage.removeItem('authToken');
             localStorage.removeItem('user');
@@ -60,15 +65,17 @@ export function AuthProvider({ children }) {
 
   const verifyToken = async (token) => {
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
-      const res = await fetch(`${apiUrl}/me`, {
+      const res = await fetch(`${API_BASE}/me`, {
         method: 'GET',
-        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       });
       if (res.status === 401) return false;
       if (!res.ok) return false;
       const data = await res.json();
-      return data?.user || false;
+      const user = data?.user || false;
+      if (!user) return false;
+      if (String(user.role || '').toLowerCase() === 'admin') return false;
+      return user;
     } catch (error) {
       console.error('verifyToken error:', error);
       return false;
@@ -76,17 +83,17 @@ export function AuthProvider({ children }) {
   };
 
   const getApiUrl = () => {
-    return import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+    return API_BASE;
   };
 
   const login = async (idNumber, password) => {
     setIsLoading(true);
     try {
       const apiUrl = getApiUrl();
-      const response = await fetch(`${apiUrl}/login`, {
-        method: "POST",
+      const response = await fetch(`${apiUrl}/substation-login`, {
+        method: 'POST',
         headers: {
-          "Content-Type": "application/json",
+          'Content-Type': 'application/json',
         },
         body: JSON.stringify({ idNumber, password }),
       });
@@ -94,18 +101,19 @@ export function AuthProvider({ children }) {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.message || "Login failed");
+        throw new Error(data.message || 'Login failed');
       }
 
-      localStorage.setItem("authToken", data.token);
-      localStorage.setItem("user", JSON.stringify(data.user));
+      localStorage.setItem('authToken', data.token);
+      localStorage.setItem('user', JSON.stringify(data.user));
 
+      setToken(data.token);
       setUser(data.user);
       setIsAuthenticated(true);
 
       return { success: true };
     } catch (error) {
-      console.error("Login error:", error);
+      console.error('Login error:', error);
       return { success: false, error: error.message };
     } finally {
       setIsLoading(false);
@@ -117,9 +125,9 @@ export function AuthProvider({ children }) {
     try {
       const apiUrl = getApiUrl();
       const response = await fetch(`${apiUrl}/signup`, {
-        method: "POST",
+        method: 'POST',
         headers: {
-          "Content-Type": "application/json",
+          'Content-Type': 'application/json',
         },
         body: JSON.stringify(userData),
       });
@@ -127,27 +135,46 @@ export function AuthProvider({ children }) {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.message || "Signup failed");
+        throw new Error(data.message || 'Signup failed');
       }
 
       return { success: true, message: data.message };
     } catch (error) {
-      console.error("Signup error:", error);
+      console.error('Signup error:', error);
       return { success: false, error: error.message };
     } finally {
       setIsLoading(false);
     }
   };
 
-  const logout = () => {
-    localStorage.removeItem("authToken");
-    localStorage.removeItem("user");
+  const logout = async () => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const apiUrl = getApiUrl();
+      await fetch(`${apiUrl}/logout`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({}),
+        keepalive: true,
+      });
+    } catch (e) {
+      // ignore
+    }
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('user');
+    setToken(null);
     setUser(null);
     setIsAuthenticated(false);
+    window.location.replace('/login');
   };
 
   return (
-    <AuthContext.Provider value={{ user, isAuthenticated, isLoading, login, signup, logout, verifyToken }}>
+    <AuthContext.Provider
+      value={{ user, token, isAuthenticated, isLoading, login, signup, logout, verifyToken }}
+    >
       {children}
     </AuthContext.Provider>
   );

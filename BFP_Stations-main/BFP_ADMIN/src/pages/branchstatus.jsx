@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
 import "../style/branchstatus.css";
+import apiClient from "../utils/apiClient";
 
 export default function BranchStatus() {
   const { user } = useAuth();
@@ -15,28 +16,10 @@ export default function BranchStatus() {
   const fetchStationsReadiness = async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem("authToken");
-      const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
-      if (!token) {
-        setError("Not authenticated");
-        return;
-      }
+      const data = await apiClient.get("/stations-readiness-overview");
+      const stationsData = Array.isArray(data) ? data : data?.overview || [];
 
-      const response = await fetch(`${apiUrl}/stations-readiness-overview`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to fetch station readiness data");
-      }
-
-      const data = await response.json();
-      // Ensure data is an array - handle both direct array and wrapped response
-      const stationsData = Array.isArray(data) ? data : (data?.overview || []);
       setStations(stationsData);
       setError("");
     } catch (err) {
@@ -47,97 +30,183 @@ export default function BranchStatus() {
     }
   };
 
-  const statusMap = {
-    READY: { class: "status-ready", icon: "fa-solid fa-circle-check" },
-    NOT_READY: {
-      class: "status-notready",
-      icon: "fa-solid fa-circle-xmark",
-    },
-    PARTIALLY_READY: { class: "status-partial", icon: "fa-solid fa-circle-half-stroke" },
-    UNKNOWN: { class: "status-unknown", icon: "fa-solid fa-circle-question" },
-  };
+  /* ========================= */
+  /* SUMMARY CALCULATIONS      */
+  /* ========================= */
+  const totalStations = stations.length;
+  const readyCount = stations.filter(
+    (s) => s.readinessStatus === "READY",
+  ).length;
+  const notReadyCount = stations.filter(
+    (s) => s.readinessStatus === "NOT_READY",
+  ).length;
+  const partialCount = stations.filter(
+    (s) => s.readinessStatus === "PARTIALLY_READY",
+  ).length;
+  const unknownCount = stations.filter(
+    (s) => !s.readinessStatus || s.readinessStatus === "UNKNOWN",
+  ).length;
 
   return (
     <div className="status-page">
-      <h1 className="page-title">Station Status Overview</h1>
+      {/* HEADER */}
+      <div className="page-header">
+        <h1 className="page-title">Station Status Overview</h1>
+        <p className="page-subtitle">City Command Monitoring Panel</p>
+      </div>
 
+      {/* ERROR */}
       {error && (
-        <div style={{ 
-          padding: '16px', 
-          backgroundColor: '#fee', 
-          color: '#c00', 
-          borderRadius: '8px', 
-          marginBottom: '16px',
-          textAlign: 'center'
-        }}>
+        <div className="error-box">
           {error}
-          <button 
-            onClick={fetchStationsReadiness}
-            style={{ marginLeft: '16px', padding: '8px 16px', cursor: 'pointer' }}
-          >
-            Retry
-          </button>
+          <button onClick={fetchStationsReadiness}>Retry</button>
         </div>
       )}
 
+      {/* SUMMARY DASHBOARD */}
+      {!loading && stations.length > 0 && (
+        <div className="summary-grid">
+          <div className="summary-card">
+            <div className="card-icon">
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+                stroke="none"
+              >
+                <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" />
+              </svg>
+            </div>
+            <div className="card-content">
+              <h3>{totalStations}</h3>
+              <p>Total Stations</p>
+            </div>
+          </div>
+
+          <div className="summary-card">
+            <div className="card-icon">
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+                stroke="none"
+              >
+                <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
+              </svg>
+            </div>
+            <div className="card-content">
+              <h3>{readyCount}</h3>
+              <p>Ready</p>
+            </div>
+          </div>
+
+          <div className="summary-card">
+            <div className="card-icon">
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+                stroke="none"
+              >
+                <path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z" />
+              </svg>
+            </div>
+            <div className="card-content">
+              <h3>{partialCount}</h3>
+              <p>Partially Ready</p>
+            </div>
+          </div>
+
+          <div className="summary-card">
+            <div className="card-icon">
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+                stroke="none"
+              >
+                <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
+              </svg>
+            </div>
+            <div className="card-content">
+              <h3>{notReadyCount}</h3>
+              <p>Not Ready</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* REFRESH BUTTON */}
+      <div className="refresh-container">
+        <button className="refresh-button" onClick={fetchStationsReadiness}>
+          Refresh Data
+        </button>
+      </div>
+
+      <hr className="summary-divider" />
+
+      {/* STATES */}
       {loading ? (
-        <div style={{ textAlign: 'center', padding: '40px', fontSize: '18px', opacity: 0.6 }}>
-          Loading station readiness data...
-        </div>
+        <div className="state-message">Loading station readiness data...</div>
       ) : stations.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '40px', fontSize: '18px', opacity: 0.6 }}>
-          No stations available
-        </div>
+        <div className="state-message">No stations available</div>
       ) : (
         <div className="stations-grid">
           {stations.map((station) => {
             const status = station.readinessStatus || "UNKNOWN";
             const readinessPercentage = station.readinessPercentage || 0;
             const submittedBy = station.lastSubmittedBy || "Unknown";
-            const submittedAt = station.lastReadinessUpdate ? new Date(station.lastReadinessUpdate).toLocaleDateString() : "Never";
+            const submittedAt = station.lastReadinessUpdate
+              ? new Date(station.lastReadinessUpdate).toLocaleDateString()
+              : "Never";
 
             return (
-              <div key={station.stationId} className="station-card">
+              <div
+                key={station.stationId}
+                className={`station-card ${status.toLowerCase()}`}
+              >
                 <div className="station-header">
                   <h2>{station.stationName}</h2>
-                  <small style={{ opacity: 0.7, fontSize: '12px' }}>
-                    ID: {station.stationId} &bull; {station.stationType === 'MAIN' ? 'Main Station' : 'Branch Station'}
-                  </small>
+                  <div className="station-type">
+                    {station.stationType === "MAIN" ? (
+                      <>
+                        <span className="main-badge">MAIN</span>
+                        <span>Central Fire Station</span>
+                      </>
+                    ) : (
+                      "Branch Station"
+                    )}
+                  </div>
                 </div>
 
                 <div className="station-status">
-                  <i
-                    className={`status-icon ${statusMap[status]?.icon} ${statusMap[status]?.class}`}
-                  ></i>
-
                   <span
-                    className={`status-text ${statusMap[status]?.class}`}
+                    className={`status-badge ${status.toLowerCase().replace(/_/g, "_")}`}
                   >
                     {status.replace(/_/g, " ")}
                   </span>
                 </div>
 
-                <div style={{ marginTop: '12px', fontSize: '14px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                    <span>Readiness:</span>
+                <div className="readiness-info">
+                  <div className="readiness-top">
+                    <span>Readiness</span>
                     <strong>{readinessPercentage}%</strong>
                   </div>
-                  <div style={{ 
-                    width: '100%', 
-                    height: '8px', 
-                    backgroundColor: '#eee', 
-                    borderRadius: '4px', 
-                    overflow: 'hidden',
-                    marginBottom: '12px'
-                  }}>
-                    <div style={{
-                      width: `${readinessPercentage}%`,
-                      height: '100%',
-                      backgroundColor: readinessPercentage === 100 ? '#4caf50' : readinessPercentage >= 50 ? '#ffc107' : '#f44336',
-                      transition: 'width 0.3s ease'
-                    }} />
+
+                  <div className="readiness-bar-container">
+                    <div
+                      className="readiness-bar"
+                      style={{
+                        width: `${readinessPercentage}%`,
+                      }}
+                    />
                   </div>
-                  <div style={{ fontSize: '12px', opacity: 0.7 }}>
+
+                  <div className="station-meta">
                     <div>Last by: {submittedBy}</div>
                     <div>Date: {submittedAt}</div>
                   </div>
@@ -147,23 +216,6 @@ export default function BranchStatus() {
           })}
         </div>
       )}
-
-      <div style={{ marginTop: '24px', textAlign: 'center' }}>
-        <button 
-          onClick={fetchStationsReadiness}
-          style={{ 
-            padding: '10px 20px', 
-            backgroundColor: '#2196f3', 
-            color: 'white', 
-            border: 'none', 
-            borderRadius: '4px', 
-            cursor: 'pointer',
-            fontSize: '14px'
-          }}
-        >
-          Refresh Data
-        </button>
-      </div>
     </div>
   );
 }

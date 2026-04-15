@@ -1,26 +1,46 @@
-import { NavLink, useNavigate } from "react-router-dom";
-import "../style/navbar.css";
+import { NavLink, useNavigate } from 'react-router-dom';
+import { useContext } from 'react';
+import { AuthContext } from '../context/AuthContext';
+import '../style/navbar.css';
 
 export default function Sidebar() {
   const navigate = useNavigate();
+  const { logout, user } = useContext(AuthContext);
 
-  const handleLogout = () => {
-    // clear session (optional)
-    // localStorage.removeItem("user");
+  const stationName =
+    user?.stationInfo?.station_name ||
+    user?.station_name ||
+    user?.substation ||
+    user?.station ||
+    'Branch BFP';
 
-    navigate("/login");
+  const handleLogout = async () => {
+    try {
+      await logout();
+    } catch (e) {
+      navigate('/login', { replace: true });
+    }
   };
 
   return (
     <aside className="sidebar">
-
       {/* Logo / Avatar */}
-      <div className="station-name">Branch BFP</div>
+      <div className="station-name">{stationName}</div>
+
+      <hr className="station-divider" />
 
       {/* MAIN NAVIGATION */}
       <nav className="nav">
         <NavLink to="/" className="nav-item">
           <i className="fa-solid fa-chart-line"></i> Dashboard
+        </NavLink>
+
+        <NavLink to="/past-incidents" className="nav-item">
+          <i className="fa-solid fa-clock-rotate-left"></i> Past Incidents
+        </NavLink>
+
+        <NavLink to="/substation/reports" className="nav-item">
+          <i className="fa-solid fa-inbox"></i> Reports
         </NavLink>
 
         <NavLink to="/officers" className="nav-item">
@@ -44,17 +64,12 @@ export default function Sidebar() {
         <NavLink to="/settings" className="nav-item">
           <i className="fa-solid fa-gear"></i> Settings
         </NavLink>
-
-        <NavLink to="/test" className="nav-item">
-          <i className="fa-solid fa-phone-volume"></i> VoIP Test
-        </NavLink>
       </nav>
 
       {/* LOGOUT BUTTON */}
       <button className="logout-btn" onClick={handleLogout}>
         Log Out
       </button>
-
     </aside>
   );
 }

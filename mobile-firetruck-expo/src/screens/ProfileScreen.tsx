@@ -1,15 +1,23 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 
 export const ProfileScreen: React.FC = () => {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
+
+  const handleLogout = () => {
+    Alert.alert('Logout', 'Are you sure you want to log out?', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Logout', style: 'destructive', onPress: () => logout() },
+    ]);
+  };
 
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Officer Profile</Text>
 
       {user ? (
+        <>
         <View style={styles.card}>
           <Text style={styles.name}>{user.name}</Text>
 
@@ -45,7 +53,19 @@ export const ProfileScreen: React.FC = () => {
               <Text style={styles.value}>{user.stationType}</Text>
             </View>
           ) : null}
+
+          {user.stationContactNumber ? (
+            <View style={styles.row}>
+              <Text style={styles.label}>Station Contact:</Text>
+              <Text style={styles.value}>{user.stationContactNumber}</Text>
+            </View>
+          ) : null}
         </View>
+
+        <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
+          <Text style={styles.logoutText}>Logout</Text>
+        </TouchableOpacity>
+        </>
       ) : (
         <Text style={styles.subtitle}>
           Not signed in. Please log in as a BFP officer to see your profile.
@@ -105,6 +125,18 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#333',
     fontWeight: '500',
+  },
+  logoutBtn: {
+    marginTop: 24,
+    backgroundColor: '#B71C1C',
+    paddingVertical: 14,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  logoutText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
   },
 });
 

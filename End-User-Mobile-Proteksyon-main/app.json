@@ -3,27 +3,31 @@
     "android": {
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/MainLogo.png",
+        "foregroundImage": "./assets/proteksyon.png",
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "package": "com.tsun2x.mobilecivilianexpoclean",
+      "versionCode": 1,
       "permissions": [
         "INTERNET",
         "CAMERA",
         "RECORD_AUDIO",
         "MODIFY_AUDIO_SETTINGS",
         "BLUETOOTH",
-        "BLUETOOTH_CONNECT"
-      ],
-  "usesCleartextTraffic": true
+        "BLUETOOTH_CONNECT",
+        "POST_NOTIFICATIONS",
+        "WAKE_LOCK",
+        "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_MICROPHONE"
+      ]
     },
     "name": "mobile-civilian-expo-clean",
-    "slug": "mobile-civilian-expo-clean",
+    "slug": "end-user",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/MainLogo.png",
+    "icon": "./assets/proteksyon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": false,
     "splash": {
@@ -37,16 +41,34 @@
     "web": {
       "favicon": "./assets/MainLogo.png"
     },
-    "extra": {
-      "eas": {
-        "projectId": "6b1697b2-c94c-4b7b-a742-c87b4e7f2859"
-      }
-    },
-    "owner": "tsun2x",
+    "owner": "fleur-system-company",
     "plugins": [
       "./plugins/withTwilioVoice",
       "@react-native-firebase/app",
-      "@react-native-firebase/messaging"
-    ]
+      "@react-native-firebase/messaging",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "gradleProperties": {
+              "systemProp.http.connectionTimeout": "300000",
+              "systemProp.http.readTimeout": "300000",
+              "systemProp.https.connectionTimeout": "300000",
+              "systemProp.https.readTimeout": "300000"
+            }
+          }
+        }
+      ],
+      "expo-font",
+      "expo-secure-store"
+    ],
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "838d2279-0179-4abb-84d7-3efd5cf8b303"
+      }
+    }
   }
 }

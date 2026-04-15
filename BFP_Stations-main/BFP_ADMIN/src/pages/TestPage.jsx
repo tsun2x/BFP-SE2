@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
+import { PHP_BACKEND_URL } from "../utils/runtimeConfig";
 
 export default function TestPage() {
   const [stationId, setStationId] = useState("101");
@@ -11,11 +12,21 @@ export default function TestPage() {
   const intervalRef = useRef(null);
   const remoteAudioRef = useRef(null);
 
-  const phpBaseUrl =
-    import.meta.env.VITE_PHP_BACKEND_URL || "http://127.0.0.1/SE_BFP";
+  const phpBaseUrl = PHP_BACKEND_URL;
   const defaultStationId = import.meta.env.VITE_STATION_ID || "101";
 
-  const stationClientUrl = `${phpBaseUrl}/station_client.html?stationId=${defaultStationId}`;
+  const stationClientUrl = phpBaseUrl
+    ? `${phpBaseUrl}/station_client.html?stationId=${defaultStationId}`
+    : null;
+
+  if (!phpBaseUrl) {
+    return (
+      <div style={{ padding: "20px", fontFamily: "Arial", maxWidth: 800 }}>
+        <h1>WebRTC Station Voice Console – BFP Admin</h1>
+        <p>Set `VITE_PHP_BACKEND_URL` to use this legacy WebRTC test page.</p>
+      </div>
+    );
+  }
 
   const appendLog = (message) => {
     setLog((prev) => {
@@ -72,7 +83,9 @@ export default function TestPage() {
     };
 
     pc.ontrack = (event) => {
-      appendLog("Remote track received on station (attaching to audio element)");
+      appendLog(
+        "Remote track received on station (attaching to audio element)",
+      );
       const audioEl = document.getElementById("remoteAudio");
       if (audioEl && event.streams[0]) {
         // Match station_client.html behavior: simply attach the MediaStream.
@@ -181,8 +194,8 @@ export default function TestPage() {
     <div style={{ padding: "20px", fontFamily: "Arial", maxWidth: 800 }}>
       <h1>WebRTC Station Voice Console – BFP Admin</h1>
       <p>
-        Use the embedded voice console below to answer calls from the
-        End-User mobile WebRTC test screen.
+        Use the embedded voice console below to answer calls from the End-User
+        mobile WebRTC test screen.
       </p>
 
       <div style={{ marginBottom: "16px" }}>
@@ -190,7 +203,12 @@ export default function TestPage() {
         <iframe
           title="Station Voice Console"
           src={stationClientUrl}
-          style={{ width: "100%", height: "420px", border: "1px solid #ccc", borderRadius: "6px" }}
+          style={{
+            width: "100%",
+            height: "420px",
+            border: "1px solid #ccc",
+            borderRadius: "6px",
+          }}
           allow="microphone; autoplay"
         />
       </div>

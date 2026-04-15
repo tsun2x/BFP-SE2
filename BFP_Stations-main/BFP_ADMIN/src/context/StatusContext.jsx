@@ -1,4 +1,6 @@
 import { createContext, useContext, useState, useEffect } from 'react';
+import { useAuth } from './AuthContext';
+import apiClient from '../utils/apiClient';
 
 // Create context
 const StatusContext = createContext();
@@ -14,7 +16,7 @@ export const useStatus = () => {
 
 // Status provider component
 export const StatusProvider = ({ children }) => {
-  const [stationStatus, setStationStatus] = useState('NOT READY');
+  const [stationStatus, setStationStatus] = useState('NOT_READY');
   const [alarmLevel, setAlarmLevel] = useState('Alarm 0 — Normal');
   const [readinessPercentage, setReadinessPercentage] = useState(0);
   const [checklistUpdated, setChecklistUpdated] = useState(false);
@@ -63,6 +65,39 @@ export const StatusProvider = ({ children }) => {
       setReadinessPercentage(0);
     }
   };
+
+  // Fetch latest readiness for the current user's assigned station
+  const { user } = useAuth();
+
+  useEffect(() => {
+    async function loadLatestReadiness() {
+      try {
+        const stationId = user?.assignedStationId || user?.assigned_station_id || null;
+        if (!stationId) return;
+
+        const data = await apiClient.get(`/station-readiness/${stationId}`);
+
+        // Expecting { readinessPercentage, status, ... }
+        const rp = data.readinessPercentage ?? data.readiness_percentage ?? null;
+        const st = data.status || data.station_status || null;
+
+        if (rp !== null) {
+          setReadinessPercentage(Number(rp));
+          setChecklistUpdated(true);
+        }
+
+        if (st) {
+          // normalize status string to match internal format
+          setStationStatus(String(st).replace(/\s+/g, '_'));
+        }
+      } catch (e) {
+        // ignore network errors silently for now
+        // console.error('Failed to load latest readiness', e);
+      }
+    }
+
+    loadLatestReadiness();
+  }, [user]);
 
   // Reset checklist status (for new day or manual reset)
   const resetChecklistStatus = () => {

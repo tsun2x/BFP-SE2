@@ -1,46 +1,73 @@
 import "../style/officers.css";
+import { useEffect, useMemo, useState } from "react";
+import apiClient from "../utils/apiClient";
 
 export default function OfficerLogInHistory() {
-  const data = [
-    {
-      id: 1,
-      login: "2025-01-12 14:32",
-      logout: null,
-      name: "Juan Dela Cruz",
-      rank: "Fire Officer 1",
-      status: "Online",
-    },
-    {
-      id: 2,
-      login: "2025-01-12 14:10",
-      logout: "2025-01-12 14:55",
-      name: "Maria Santos",
-      rank: "Senior Fire Officer 2",
-      status: "Offline",
-    },
-    {
-      id: 3,
-      login: "2025-01-12 13:50",
-      logout: "2025-01-12 14:20",
-      name: "Carlos Reyes",
-      rank: "Fire Officer 2",
-      status: "Offline",
-    },
-  ];
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  const data = useMemo(() => {
+    return (rows || []).map((r) => ({
+      id: r.id,
+      login: r.login_time ? new Date(r.login_time).toLocaleString() : "—",
+      logout: r.logout_time ? new Date(r.logout_time).toLocaleString() : null,
+      name: r.users?.full_name || "—",
+      rank: r.users?.rank || "—",
+      status: r.status || "—",
+    }));
+  }, [rows]);
+
+  useEffect(() => {
+    let mounted = true;
+    const load = async () => {
+      try {
+        setLoading(true);
+        setError("");
+        const json = await apiClient.get('/officer-login-history');
+        const list = Array.isArray(json?.data) ? json.data : [];
+        if (!mounted) return;
+        setRows(list);
+      } catch (e) {
+        if (!mounted) return;
+        setError(e?.message || 'Failed to load login history');
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+    load();
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   return (
     <div className="officer-log-page">
       <h1 className="officer-page-title">Officer Login History</h1>
 
+      {error && (
+        <div className="error-box">
+          {error}
+        </div>
+      )}
+
       {/* SEARCH + FILTERS */}
       <div className="officer-search-card">
 
         {/* SEARCH */}
-        <input
-          type="text"
-          placeholder="Search Officer Name..."
-          className="officer-search-input"
-        />
+        <div className="officer-search-wrapper">
+          <span className="officer-search-icon">
+            <svg viewBox="0 0 24 24">
+              <circle cx="11" cy="11" r="8"/>
+              <path d="m21 21-4.35-4.35"/>
+            </svg>
+          </span>
+          <input
+            type="text"
+            placeholder="Search Officer Name..."
+            className="officer-search-input"
+          />
+        </div>
 
         {/* FILTERS */}
         <div className="officer-filters">
@@ -87,7 +114,15 @@ export default function OfficerLogInHistory() {
           </thead>
 
           <tbody>
-            {data.map((officer) => (
+            {loading ? (
+              <tr>
+                <td colSpan={5}>Loading...</td>
+              </tr>
+            ) : data.length === 0 ? (
+              <tr>
+                <td colSpan={5}>No login history found</td>
+              </tr>
+            ) : data.map((officer) => (
               <tr key={officer.id}>
                 <td>{officer.login}</td>
                 <td>{officer.logout ? officer.logout : "—"}</td>

@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 import { Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { API_URL } from '../config';
 
 export type AuthUser = {
   id: number;
@@ -14,6 +15,7 @@ export type AuthUser = {
   assignedStationId?: number | null;
   stationName?: string | null;
   stationType?: string | null;
+  stationContactNumber?: string | null;
 };
 
 export type AuthContextType = {
@@ -26,28 +28,84 @@ export type AuthContextType = {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const TOKEN_KEY = 'firetruck_token';
+const USER_KEY = 'firetruck_user';
+
+const mapApiUserToAuthUser = (apiUser: any): AuthUser => ({
+  id: Number(apiUser?.id || 0) || 0,
+  idNumber: apiUser?.idNumber || '',
+  name: apiUser?.name || '',
+  firstName: apiUser?.firstName ?? null,
+  lastName: apiUser?.lastName ?? null,
+  rank: apiUser?.rank ?? null,
+  substation: apiUser?.substation ?? null,
+  role: apiUser?.role || 'driver',
+  assignedStationId:
+    Number(apiUser?.assignedStationId || apiUser?.assigned_station_id || 0) ||
+    null,
+  stationName: apiUser?.stationInfo?.station_name || null,
+  stationType: apiUser?.stationInfo?.station_type || null,
+  stationContactNumber: apiUser?.stationInfo?.contact_number || null,
+});
+
+const sanitizeToken = (raw: string | null | undefined): string | null => {
+  if (!raw) return null;
+  const trimmed = String(raw).trim();
+  if (!trimmed) return null;
+  // Basic JWT shape check: header.payload.signature
+  if (!/^[A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]+$/.test(trimmed)) {
+    return null;
+  }
+  return trimmed;
+};
+
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  const STORAGE_KEY = 'firetruck_local_user';
-
-  // Load any previously saved local user on app start
+  // Restore session on app start
   useEffect(() => {
-    const loadUser = async () => {
+    const restore = async () => {
       try {
-        const stored = await AsyncStorage.getItem(STORAGE_KEY);
-        if (stored) {
-          const parsed = JSON.parse(stored) as { user: AuthUser; password: string };
-          setUser(parsed.user);
-          setToken(null);
+        const storedToken = await AsyncStorage.getItem(TOKEN_KEY);
+        const storedUser = await AsyncStorage.getItem(USER_KEY);
+        const validToken = sanitizeToken(storedToken);
+        if (validToken && storedUser) {
+          setToken(validToken);
+          setUser(JSON.parse(storedUser));
+
+          // Always refresh from backend so assigned station/name stays in sync.
+          try {
+            const meRes = await fetch(API_URL + '/api/me', {
+              method: 'GET',
+              headers: {
+                Authorization: 'Bearer ' + validToken,
+                'ngrok-skip-browser-warning': 'true',
+              },
+            });
+
+            if (meRes.ok) {
+              const meData = await meRes.json();
+              const refreshedUser = mapApiUserToAuthUser(meData?.user || {});
+              if (refreshedUser.id) {
+                setUser(refreshedUser);
+                await AsyncStorage.setItem(USER_KEY, JSON.stringify(refreshedUser));
+              }
+            }
+          } catch {
+            // Keep cached user if /me fails.
+          }
+        } else if (storedToken || storedUser) {
+          // Clear corrupted or legacy auth cache so requests don't send malformed tokens.
+          await AsyncStorage.removeItem(TOKEN_KEY).catch(() => {});
+          await AsyncStorage.removeItem(USER_KEY).catch(() => {});
         }
-      } catch (error) {
+      } catch (e) {
         // ignore
       }
     };
-    loadUser();
+    restore();
   }, []);
 
   const login = async (idNumber: string, password: string) => {
@@ -56,44 +114,62 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
 
     setIsLoading(true);
-
     try {
-      // If a local user already exists, validate credentials against it
-      const existing = await AsyncStorage.getItem(STORAGE_KEY);
+      console.log('[Auth] LOGIN URL:', API_URL + '/api/login');
+      const res = await fetch(API_URL + '/api/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'ngrok-skip-browser-warning': 'true',
+        },
+        body: JSON.stringify({ idNumber, password }),
+      });
 
-      if (existing) {
-        const parsed = JSON.parse(existing) as { user: AuthUser; password: string };
-        if (parsed.user.idNumber === idNumber && parsed.password === password) {
-          setUser(parsed.user);
-          setToken(null);
-          return;
-        }
-        throw new Error('Invalid ID or password.');
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.message || 'Login failed');
       }
 
-      // No user saved yet: create one locally using the provided credentials
-      // e.g. first login with BFP-00009 / testpass321 will become the local account
-      const newUser: AuthUser = {
-        id: Date.now(),
-        idNumber,
-        name: idNumber,
-        firstName: null,
-        lastName: null,
-        rank: null,
-        substation: null,
-        role: 'driver',
-        assignedStationId: null,
-        stationName: null,
-        stationType: null,
-      };
+      const role = String(data?.user?.role || '').toLowerCase();
+      if (role !== 'driver') {
+        throw new Error('This app is for driver accounts only. Please sign in with a driver role account.');
+      }
 
-      await AsyncStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify({ user: newUser, password }),
-      );
+      let authUser: AuthUser = mapApiUserToAuthUser(data?.user || {});
 
-      setUser(newUser);
-      setToken(null);
+      const validToken = sanitizeToken(data?.token);
+      if (!validToken) {
+        throw new Error('Login succeeded but server returned an invalid token. Please try again.');
+      }
+
+      await AsyncStorage.setItem(TOKEN_KEY, validToken);
+
+      // Refresh profile from /me right after login so station mapping is always authoritative.
+      try {
+        const meRes = await fetch(API_URL + '/api/me', {
+          method: 'GET',
+          headers: {
+            Authorization: 'Bearer ' + validToken,
+            'ngrok-skip-browser-warning': 'true',
+          },
+        });
+
+        if (meRes.ok) {
+          const meData = await meRes.json();
+          const refreshedUser = mapApiUserToAuthUser(meData?.user || {});
+          if (refreshedUser.id) {
+            authUser = refreshedUser;
+          }
+        }
+      } catch {
+        // Fallback to login payload if /me fails.
+      }
+
+      await AsyncStorage.setItem(USER_KEY, JSON.stringify(authUser));
+
+      setToken(validToken);
+      setUser(authUser);
     } catch (error: any) {
       const message = error?.message || 'Login failed. Please try again.';
       Alert.alert('Login failed', message);
@@ -103,10 +179,26 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const logout = () => {
+  const logout = async () => {
+    // Call backend logout if we have a token
+    if (token) {
+      try {
+        await fetch(API_URL + '/api/logout', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: 'Bearer ' + token,
+            'ngrok-skip-browser-warning': 'true',
+          },
+        });
+      } catch (e) {
+        // ignore
+      }
+    }
     setUser(null);
     setToken(null);
-     AsyncStorage.removeItem(STORAGE_KEY).catch(() => {});
+    await AsyncStorage.removeItem(TOKEN_KEY).catch(() => {});
+    await AsyncStorage.removeItem(USER_KEY).catch(() => {});
   };
 
   return (

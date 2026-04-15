@@ -1,27 +1,55 @@
 {
   "expo": {
     "name": "mobile-firetruck-expo",
-    "slug": "mobile-firetruck-expo",
+    "slug": "firetruck-driver",
+    "scheme": "mobilefiretruckexpo",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.bfp.mobilefiretruckexpo"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
+      "package": "com.bfp.mobilefiretruckexpo",
+      "versionCode": 1,
+      "googleServicesFile": "./google-services.json",
+      "permissions": [
+        "INTERNET",
+        "RECORD_AUDIO",
+        "MODIFY_AUDIO_SETTINGS",
+        "BLUETOOTH",
+        "BLUETOOTH_CONNECT"
+      ],
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false
+    },
+    "plugins": [
+      "./plugins/withTwilioVoice",
+      "@react-native-firebase/app",
+      "@react-native-firebase/messaging",
+      "expo-font",
+      "expo-notifications"
+    ],
+    "owner": "fleur-system-company",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "a52da217-bb0e-4d6a-b039-1e46976eaa1a"
+      }
     }
   }
 }

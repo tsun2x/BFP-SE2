@@ -45,7 +45,7 @@ router.get('/firestations/:id', async (req, res) => {
 // Create a new fire station (admin only)
 router.post('/firestations', authenticateToken, requireRole('admin'), async (req, res) => {
   try {
-    const { stationName, province, city, contactNumber, latitude, longitude, stationType } = req.body;
+    const { stationName, contactNumber, latitude, longitude, stationType, address } = req.body;
 
     if (!stationName || latitude === undefined || longitude === undefined || !stationType) {
       return res.status(400).json({ message: 'Missing required fields: stationName, latitude, longitude, stationType' });
@@ -63,23 +63,38 @@ router.post('/firestations', authenticateToken, requireRole('admin'), async (req
       .insert([
         {
           station_name: stationName,
-          province: province || null,
-          city: city || null,
           contact_number: contactNumber || null,
+          address: typeof address === 'string' && address.trim() ? address.trim() : null,
           latitude: lat,
-          longitude: lng
+          longitude: lng,
+          station_type: stationType || null
         }
       ])
       .select('station_id')
       .single();
 
-    if (insertErr) throw insertErr;
+    if (insertErr) {
+      console.error('Create station supabase error:', insertErr);
+      return res.status(500).json({
+        message: 'Failed to create station',
+        error: insertErr.message,
+        code: insertErr.code,
+        details: insertErr.details,
+        hint: insertErr.hint,
+      });
+    }
 
     const stationId = insertResult.station_id;
     res.status(201).json({ message: 'Station created', stationId });
   } catch (error) {
     console.error('Create station error:', error);
-    res.status(500).json({ message: 'Failed to create station', error: error.message });
+    res.status(500).json({
+      message: 'Failed to create station',
+      error: error.message,
+      code: error.code,
+      details: error.details,
+      hint: error.hint,
+    });
   }
 });
 
@@ -87,18 +102,18 @@ router.post('/firestations', authenticateToken, requireRole('admin'), async (req
 router.put('/firestations/:id', authenticateToken, requireRole('admin'), async (req, res) => {
   try {
     const stationId = req.params.id;
-    const { stationName, province, city, contactNumber, latitude, longitude, stationType } = req.body;
+    const { stationName, contactNumber, latitude, longitude, stationType, address } = req.body;
 
     // Build update object
     const updates = {};
     if (stationName !== undefined) updates.station_name = stationName;
-    if (province !== undefined) updates.province = province;
-    if (city !== undefined) updates.city = city;
     if (contactNumber !== undefined) updates.contact_number = contactNumber;
+    if (address !== undefined) updates.address = typeof address === 'string' && address.trim() ? address.trim() : null;
     if (latitude !== undefined && longitude !== undefined) {
       updates.latitude = parseFloat(latitude);
       updates.longitude = parseFloat(longitude);
     }
+    if (stationType !== undefined) updates.station_type = stationType;
 
     if (Object.keys(updates).length === 0) {
       return res.status(400).json({ message: 'No fields provided to update' });
@@ -110,7 +125,16 @@ router.put('/firestations/:id', authenticateToken, requireRole('admin'), async (
       .eq('station_id', stationId)
       .select('station_id');
 
-    if (updateErr) throw updateErr;
+    if (updateErr) {
+      console.error('Update station supabase error:', updateErr);
+      return res.status(500).json({
+        message: 'Failed to update station',
+        error: updateErr.message,
+        code: updateErr.code,
+        details: updateErr.details,
+        hint: updateErr.hint,
+      });
+    }
 
     if (!updatedRows || updatedRows.length === 0) {
       return res.status(404).json({ message: 'Station not found' });
@@ -119,7 +143,13 @@ router.put('/firestations/:id', authenticateToken, requireRole('admin'), async (
     res.json({ message: 'Station updated', stationId });
   } catch (error) {
     console.error('Update station error:', error);
-    res.status(500).json({ message: 'Failed to update station', error: error.message });
+    res.status(500).json({
+      message: 'Failed to update station',
+      error: error.message,
+      code: error.code,
+      details: error.details,
+      hint: error.hint,
+    });
   }
 });
 
